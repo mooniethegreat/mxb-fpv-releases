@@ -1,15 +1,25 @@
 {
   "schema": 1,
-  "stable": null,
+  "stable": {
+    "game_sha256": [
+      "9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291"
+    ],
+    "notes": "MXB FPV v1.0 stable release. Multiplayer is tested on public servers. Includes pit-screen drone spectator flight, rider/drone maps, centered controls, spatial sound, in-game tuning and verified updates. Reviewed flight behavior is unchanged.",
+    "version": "1.0",
+    "installer": {
+      "bytes": 4641280,
+      "sha256": "e3c287a778c84735a04763af3063cac7d7c27470822a5d4416b97cb04c87cf8d"
+    }
+  },
   "preview": {
     "game_sha256": [
       "9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291"
     ],
-    "notes": "Multiplayer is tested and working on public servers. 0.7 adds Fly FPV from mid-race pits, numbered riders and drone icons on the map, retained map controls and a centered flight display. Reviewed and approved for release.",
-    "version": "0.7",
+    "notes": "MXB FPV v1.0 stable release. Multiplayer is tested on public servers. Includes pit-screen drone spectator flight, rider/drone maps, centered controls, spatial sound, in-game tuning and verified updates. Reviewed flight behavior is unchanged.",
+    "version": "1.0",
     "installer": {
       "bytes": 4641280,
-      "sha256": "9f334076848ad333da7829728a0a7f01be6d3fbbb1e6c2a570f4e9f7d6b5a3c5"
+      "sha256": "e3c287a778c84735a04763af3063cac7d7c27470822a5d4416b97cb04c87cf8d"
     }
   }
 }
