@@ -1,8 +1,8 @@
-# MXB FPV 0.7 implementation
+# MXB FPV v1.0 implementation
 
-The user confirmed successful 0.6 multiplayer operation on public servers.
-Multiplayer support is tested and working. The user reviewed the 0.7
-spectator/map/OSD build and authorized its release and update-feed publication.
+Multiplayer is tested and working on public servers. Version 1.0 promotes the
+reviewed 0.7 behavior to a stable release. Changes are version labels, release
+documentation and stable update defaults; flight and networking are unchanged.
 The coding agent did not launch the game.
 
 SDK: data version 8, interface 9. Pinned executable SHA256:

@@ -20,12 +20,14 @@ For a new release:
 Use PowerShell 7 for the packaging script, plus Visual Studio 2022 C++ Build Tools and a Windows SDK for compilation.
 
 1. Update `mod/src/version.h`, visible version labels, README and release notes. A changed game binary also requires revalidating the native adapters; changing a hash alone is insufficient.
-2. Run `./mod/build.ps1 -SkipTests`, then `./Package.ps1 -Channel preview`. This creates the installer, tester ZIP, source ZIP, checksums and a **proposed** manifest in `out/<version>/update.json`.
+2. Run `./mod/build.ps1 -SkipTests`, then `./Package.ps1 -Channel stable`. This creates the installer, release ZIP, source ZIP, checksums and a **proposed** manifest in `out/<version>/update.json`. Use `-Channel preview` only for an intentionally early release.
 3. After the user's review/authorization, commit the source/docs and push `main`. Create a **draft** GitHub release tagged `v<version>` at that commit. Upload the assets from `out/<version>` except `update.json`.
-4. Check that uploaded asset sizes and SHA-256 digests match `out/<version>/SHA256SUMS.txt`. Publish the release; mark preview versions as prereleases.
+4. Check that uploaded asset sizes and SHA-256 digests match `out/<version>/SHA256SUMS.txt`. Publish stable versions as regular releases with `make_latest: true`. Only preview versions are prereleases.
 5. Only after assets are public, replace the root `update.json` with `out/<version>/update.json`, commit it and push `main`. This prevents the updater offering an unavailable installer.
 
 Use `-Channel stable` only for a release you intend to call stable. Preview releases should be tested with multiple clients before promotion. Preserve the other channel when updating a manifest.
+
+Stable packaging also advances the preview feed when its current version is older or equal, so existing early-release users receive the stable release too. It preserves a genuinely newer preview version. New installations use stable updates by default.
 
 The downloader accepts at most 128 MiB, requires the exact expected size/hash and matching game hash, stages the verified file in Downloads, and never runs it. Setup refuses to replace a loaded plugin while the game is running, preserves the INI and keeps the previous recognized plugin for rollback.
 

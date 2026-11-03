@@ -130,7 +130,7 @@ void Overlay() {
         auto update=updater.Status();
         ImGui::Spacing();ImGui::Checkbox("Check on launch (6-hour cache)",&automaticUpdates);
         ImGui::BeginDisabled(update.busy);
-        if(ImGui::Checkbox("Include tester releases",&previewUpdates))updater.Check(previewUpdates);
+        if(ImGui::Checkbox("Include early releases (optional)",&previewUpdates))updater.Check(previewUpdates);
         ImGui::EndDisabled();
         ImGui::TextDisabled("Click Save to keep these preferences.");
         ImGui::Spacing();

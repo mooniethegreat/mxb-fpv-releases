@@ -1,10 +1,8 @@
-MX Bikes FPV 0.7
+MX Bikes FPV v1.0
 
-Multiplayer is supported and tested on public servers. The user confirmed that
-0.6 works successfully in public lobbies. Version 0.7 adds pit-screen spectator
-flight, map markers and the centered flight display. The user reviewed the build
-and approved its release. 0.7 is available through GitHub and the tester update
-channel. The coding agent did not launch the game; gameplay testing is by users.
+Multiplayer is supported and tested on public servers. Version 1.0 is the stable
+release, with pit-screen spectator flight, rider/drone map markers, a centered
+flight display and in-game settings. It preserves the reviewed flight behavior.
 
 INSTALL
 Close MX Bikes. Run MXB-FPV-Setup.exe, select the game folder, click Install.
@@ -34,15 +32,16 @@ thrust, props, cells, spool, drag, camera and collision tuning. Presets are
 inspired approximations, not measured replicas. Rates remain separate from props.
 Audio & display: local/remote sound volume, audible range and FPV display switches.
 Multiplayer: drone sound/body/pose sharing connection. Rider: goggles/controller fit.
-Updates: check GitHub, select stable/tester releases, download a verified installer.
+Updates: check GitHub, choose stable or early releases, download a verified installer.
 Click Save to retain changes. Settings entry uses a flat gray/blue menu with pages.
 
 UPDATES
 Official releases: https://github.com/mooniethegreat/mxb-fpv-releases/releases
 Settings > FPV Drone > Updates checks in the background, at most once per six
 hours across game launches. Manual Check for updates always refreshes the result.
-Tester releases are enabled by default. Checks can be disabled. Version 0.7 is
-available in the tester channel. Manual Check for updates bypasses the cache.
+Version 1.0 is available in the stable channel. New installations check stable
+releases by default; existing update preferences are preserved. Manual Check for
+updates bypasses the cache. You can disable checks or opt into early releases.
 Nothing is downloaded until you click Download verified installer. Downloads use
 HTTPS, the exact published file size and SHA256, and the supported game-build hash.
 Files are saved in %LOCALAPPDATA%/MXB-FPV/Downloads. Open that folder, close MX Bikes,
@@ -114,7 +113,7 @@ Camera chase still works alongside riders who do not install the mod.
 
 The native forwarding path and unknown-type handling were traced in the pinned
 game binary. The user subsequently tested 0.6 on public servers and confirmed
-multiplayer works. The user reviewed 0.7 and approved it for publication.
+multiplayer works. The reviewed build is now published as the stable v1.0 release.
 Server content checks, bike replication and race results are unchanged.
 
 Settings > FPV > Multiplayer shows discovered FPV peers versus connected riders.

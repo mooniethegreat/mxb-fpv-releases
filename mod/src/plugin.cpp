@@ -44,7 +44,7 @@ DroneAudio droneAudio;
 AudioSettings audioSettings;
 TrafficCollision traffic;
 Updater updater;
-bool automaticUpdates{true},previewUpdates{true};
+bool automaticUpdates{true},previewUpdates{false};
 NativeView nativeView;
 MapHud mapHud;
 MapSettings mapSettings;
@@ -589,7 +589,7 @@ EXPORT int Startup(char*) {
     mapSettings.size=Number(L"Map",L"Size",280,180,460);
     mapSettings.key=static_cast<int>(Number(L"Map",L"ToggleKey",'M',1,254));
     automaticUpdates=Number(L"Updates",L"Automatic",1,0,1)!=0;
-    previewUpdates=Number(L"Updates",L"TesterReleases",1,0,1)!=0;
+    previewUpdates=Number(L"Updates",L"TesterReleases",0,0,1)!=0;
     updater.Start(automaticUpdates,previewUpdates);
     toggleKey=static_cast<int>(Number(L"Controls",L"ToggleKey",VK_F8,1,254));
     cameraFov=Number(L"Flight",L"Fov",100,60,120);
@@ -663,7 +663,7 @@ EXPORT int Startup(char*) {
     syncSettings.room=Utf8(Setting(L"Multiplayer",L"Room",L"mx-fpv"));
     peerSync.Configure(syncSettings);
     hooksReady=InstallHooks();
-    Log(hooksReady?"MXB FPV 0.7 initialized. Multiplayer supported; pit spectator, map and centered OSD ready for review.":"Hook installation failed. FPV unavailable.");
+    Log(hooksReady?"MXB FPV 1.0 initialized. Multiplayer, pit spectator, map and centered OSD enabled.":"Hook installation failed. FPV unavailable.");
     return 0;
 }
 EXPORT void Shutdown(){

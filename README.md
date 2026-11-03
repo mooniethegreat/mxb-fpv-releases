@@ -4,11 +4,11 @@
 
 Fly an FPV drone in MX Bikes and chase your friends around the track. Made by **Moonie the Great**.
 
-**[Download 0.7 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v0.7/MXB-FPV-0.7-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v0.7)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
+**[Download v1.0 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v1.0/MXB-FPV-1.0-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v1.0)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
 
 **Multiplayer is tested and working on public servers.** Supports Windows 64-bit and MX Bikes beta 21e (Steam build 23566986).
 
-**0.7 is available.** Fly FPV from the mid-race pit screen, find riders and drones on the map, and use the centered flight display. See [what changed in 0.7](CHANGELOG-0.7.md).
+**v1.0 is the stable release.** Fly FPV from the mid-race pit screen, find riders and drones on the map, and use the centered flight display. See [v1.0 release notes](CHANGELOG-1.0.md).
 
 ## Install and fly
 
@@ -46,7 +46,7 @@ The Multiplayer settings page shows discovery status. A manual UDP relay remains
 
 ## Updates and removal
 
-**Settings → FPV Drone → Updates** checks this repository in the background, at most once per six hours across game launches. You can check manually, disable checks or choose stable releases only. Tester releases are enabled by default; 0.7 is published in that channel.
+**Settings → FPV Drone → Updates** checks this repository in the background, at most once per six hours across game launches. Click **Check for updates** to refresh immediately. **v1.0 is available on the stable channel**; no early-release option is needed. New installations use stable updates by default, and existing preferences are preserved.
 
 Downloads happen only when you click **Download verified installer**. The checker verifies file size, SHA-256 and game-build compatibility. Open the download folder, close the game, then run Setup. It preserves your radio mapping and keeps the previous plugin; **Roll back** restores it. Nothing installs automatically while you play.
 

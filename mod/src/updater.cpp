@@ -112,7 +112,7 @@ UpdateStatus Parse(const std::string& text,bool preview) {
         if(!candidate.compatible)candidate.message="This release supports a different MX Bikes build. Download is disabled.";
         best=candidate;found=true;
     }
-    if(!found)best.message="No release is published in this channel yet. Enable tester releases for 0.6.";
+    if(!found)best.message="No release is published in the selected update channel yet.";
     return best;
 }
 }
