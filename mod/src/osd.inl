@@ -10,15 +10,16 @@ void DroneLcd(ImDrawList* draw,ImVec2 display) {
     // This is the live native profile preference: 0 metric, 1 US, 2 UK.
     int units=*reinterpret_cast<const int*>(gameBase+0xe557d4);bool miles=units==1||units==2;
     int number=std::clamp(static_cast<int>(speed*(miles?2.2369363f:3.6f)),0,999);
-    float scale=std::clamp(display.y/1080.0f,0.7f,1.6f),left=display.x-310*scale,top=display.y-128*scale;
+    float fit=std::clamp(std::min(display.y/1080.0f,display.x/1920.0f),0.5f,1.6f);
+    float scale=fit*0.56f,left=display.x*0.5f+146*fit,top=display.y-101*fit;
     draw->AddRectFilled({left,top},{left+286*scale,top+107*scale},IM_COL32(4,7,10,215));ImU32 lcd=IM_COL32(231,236,225,255);
     const char* icon[]={"11100000111","10110001101","11101010111","00001110000","00001110000","11101010111","10110001101","11100000111"};
     float pixel=4*scale;for(int y=0;y<8;y++)for(int x=0;x<11;x++)if(icon[y][x]=='1')draw->AddRectFilled({left+(12+x*4)*scale,top+(25+y*4)*scale},{left+(12+x*4)*scale+pixel*0.8f,top+(25+y*4)*scale+pixel*0.8f},lcd);
     char digits[4]{};sprintf_s(digits,"%d",number);float x=left+75*scale;for(const char* p=digits;*p;p++){LcdDigit(draw,*p-'0',{x,top+14*scale},65*scale,lcd);x+=39*scale;}
-    draw->AddText({left+211*scale,top+61*scale},lcd,miles?"mph":"km/h");draw->AddText({left+12*scale,top+82*scale},crashed?IM_COL32(255,110,70,255):lcd,crashed?"CRASHED":"FPV");
+    draw->AddText(ImGui::GetFont(),13*fit,{left+211*scale,top+61*scale},lcd,miles?"mph":"km/h");draw->AddText(ImGui::GetFont(),13*fit,{left+12*scale,top+82*scale},crashed?IM_COL32(255,110,70,255):lcd,crashed?"CRASHED":"FPV");
 }
 void FlightOsd() {
-    if(!active||!onTrack||settingsScreen)return;
+    if(!active||(!onTrack&&!spectatorMode)||settingsScreen)return;
     auto display=ImGui::GetIO().DisplaySize;auto draw=ImGui::GetBackgroundDrawList();
     if(showDroneHud&&(replaceBikeHud||GetTickCount64()-gearTick>=200))DroneLcd(draw,display);
     if(showDroneHud&&!replaceBikeHud&&GetTickCount64()-gearTick<200){
@@ -34,9 +35,10 @@ void FlightOsd() {
     }
     if(!showControls)return;Input input;bool crashed{},mode3d{};float command{},impact{};
     {std::lock_guard<std::mutex> lock(flightMutex);input=flightInput;crashed=flight.crashed;mode3d=flightSettings.mode3d;command=ThrottleCommand(input.throttle,flightSettings);impact=flight.impactSpeed;}
-    float s=std::clamp(display.y/1080.0f,0.7f,1.6f),left=24*s,top=display.y-170*s;
+    float fit=std::clamp(std::min(display.y/1080.0f,display.x/1920.0f),0.5f,1.6f);
+    float s=fit*0.8f,left=display.x*0.5f-165*s,top=display.y-170*s;
     draw->AddRectFilled({left-8*s,top-8*s},{left+338*s,top+151*s},IM_COL32(8,12,18,205));
-    auto label=[&](float x,float y,const char* text){draw->AddText({left+x*s,top+y*s},IM_COL32(225,230,234,255),text);};
+    auto label=[&](float x,float y,const char* text){draw->AddText(ImGui::GetFont(),14*fit,{left+x*s,top+y*s},IM_COL32(225,230,234,255),text);};
     ImU32 line=IM_COL32(160,170,182,200),green=crashed?IM_COL32(235,90,55,255):IM_COL32(110,205,115,255);
     // Roll / pitch use their mapped physical channels, not stock bike steering inputs.
     ImVec2 center{left+66*s,top+69*s};float radius=46*s;
@@ -53,5 +55,5 @@ void FlightOsd() {
     else draw->AddRectFilled({barX+2*s,barBottom-input.throttle*(barBottom-barTop)},{barX+barWidth-2*s,barBottom},green);
     char value[64]{};sprintf_s(value,mode3d?"%+.0f%%":"%.0f%%",mode3d?command*100:input.throttle*100);label(260,121,value);
     if(crashed){sprintf_s(value,"CRASHED  %.0f m/s  /  R: reset",impact);label(0,132,value);}
-    else label(0,132,"FPV  /  F8: bike  /  R: reset");
+    else label(0,132,spectatorMode?"F8: pits  /  M: map  /  R: reset":"F8: bike  /  M: map  /  R: reset");
 }

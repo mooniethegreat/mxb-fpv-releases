@@ -1,3 +1,22 @@
+void PitEntry() {
+    if(!pitScreen||menuOpen||settingsScreen||spectatorMode)return;
+    auto display=ImGui::GetIO().DisplaySize;float width=std::min(display.x,display.y*16/9),height=width*9/16;
+    bool nextToGate=nativeView.RaceInfoTab();float x=nextToGate?0.275f:0.25f,y=nextToGate?nativeView.GateButtonY():0.966667f;
+    ImVec2 position{(display.x-width)*0.5f+x*width,(display.y-height)*0.5f+y*height},size{width*0.125f,height/30};
+    ImGui::SetNextWindowPos(position,ImGuiCond_Always);ImGui::SetNextWindowSize(size,ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
+    ImGui::Begin("Fly FPV pit entry",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoNav);
+    bool clicked=ImGui::InvisibleButton("Fly FPV",size);auto draw=ImGui::GetWindowDrawList();bool hover=ImGui::IsItemHovered();
+    draw->AddRectFilledMultiColor(position,{position.x+size.x,position.y+size.y},hover?IM_COL32(119,143,164,255):IM_COL32(103,116,128,255),hover?IM_COL32(119,143,164,255):IM_COL32(103,116,128,255),IM_COL32(60,74,89,255),IM_COL32(60,74,89,255));
+    draw->AddRect(position,{position.x+size.x,position.y+size.y},IM_COL32(156,170,184,255));float font=std::clamp(height*0.02f,13.0f,30.0f);
+    auto text=ImGui::GetFont()->CalcTextSizeA(font,1000,0,"Fly FPV");draw->AddText(ImGui::GetFont(),font,{position.x+(size.x-text.x)*0.5f,position.y+(size.y-text.y)*0.5f},IM_COL32(240,240,240,255),"Fly FPV");
+    if(clicked)spectatorRequested=true;
+    if(hover)ImGui::SetTooltip("Fly as a drone spectator while the race continues. F8 or Escape returns to the pits.");
+    ImGui::End();ImGui::PopStyleVar();
+    if(!spectatorStatus.empty()){
+        ImGui::SetNextWindowPos({position.x,position.y-45});ImGui::SetNextWindowSize({460,0});ImGui::Begin("FPV pit status",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoSavedSettings);ImGui::TextWrapped("%s",spectatorStatus.c_str());ImGui::End();
+    }
+}
 void RatePlot() {
     auto origin=ImGui::GetCursorScreenPos();ImVec2 size{ImGui::GetContentRegionAvail().x,160};ImGui::InvisibleButton("rates graph",size);
     auto d=ImGui::GetWindowDrawList();d->AddRectFilled(origin,{origin.x+size.x,origin.y+size.y},IM_COL32(237,240,244,255));
@@ -78,10 +97,17 @@ void Overlay() {
         if(ImGui::CollapsingHeader("Advanced handling / ground response")){ImGui::SliderFloat("Motor spool",&flightSettings.motorResponseMs,10,100,"%.0f ms");ImGui::SliderFloat("Motor thrust exponent",&flightSettings.throttleCurve,0.7f,2,"%.2f");ImGui::SliderFloat("Air drag area",&flightSettings.dragArea,0.001f,0.1f,"%.3f");ImGui::SliderFloat("Bounce",&flightSettings.restitution,0,0.8f,"%.2f");ImGui::SliderFloat("Ground friction",&flightSettings.groundFriction,0,1,"%.2f");ImGui::SliderFloat("Collision radius",&flightSettings.radius,0.05f,0.3f,"%.2f m");}
     }else if(page==3){
         ImGui::Checkbox("Drone motor sound",&audioSettings.enabled);ImGui::SliderFloat("Motor volume",&audioSettings.volume,0,2,"%.2f");ImGui::Checkbox("Hear other pilots' drones",&audioSettings.remote);ImGui::SliderFloat("Other drone volume",&audioSettings.remoteVolume,0,2,"%.2f");ImGui::SliderFloat("Audible distance",&audioSettings.range,30,300,"%.0f m");ImGui::TextDisabled("%s",droneAudio.Status());
-        ImGui::SeparatorText("Flight display");ImGui::Checkbox("Drone icon and drone speed in dashboard",&showDroneHud);ImGui::Checkbox("Mapped stick / throttle display",&showControls);ImGui::Checkbox("Replace bike / MaxHUD widgets while in FPV",&replaceBikeHud);
+        ImGui::SeparatorText("Flight display");ImGui::Checkbox("Drone icon and drone speed in dashboard",&showDroneHud);ImGui::Checkbox("Mapped stick / throttle display",&showControls);ImGui::Checkbox("Replace bike controls and instruments while in FPV",&replaceBikeHud);
         ImGui::TextWrapped("Speed uses MX Bikes' current units. Roll, pitch and yaw follow Receiver mapping. Normal throttle is a bottom-to-top bar; 3D throttle has a center neutral point.");
+        if(ImGui::CollapsingHeader("Map",ImGuiTreeNodeFlags_DefaultOpen)){
+            ImGui::Checkbox("Map with numbered riders and drone icons",&mapSettings.enabled);
+            ImGui::Checkbox("Use existing MaxHUD map when available",&mapSettings.external);
+            ImGui::SliderFloat("Fallback map size",&mapSettings.size,180,460,"%.0f px");
+            ImGui::SetNextItemWidth(120);if(ImGui::InputInt("Map key (M = 77)",&mapSettings.key))mapSettings.key=std::clamp(mapSettings.key,1,254);
+            ImGui::TextWrapped("The map is available while riding and flying. Your drone is green; other pilots are orange. MaxHUD's map and standings remain available. The FPV map uses the current track centerline if no usable HUD map is found.");
+        }
     }else if(page==4){
-        ImGui::TextWrapped("Join the same multiplayer session with FPV 0.6 installed. Drones, sound, goggles and controller poses are shared automatically through the game server.");
+        ImGui::TextWrapped("Multiplayer is tested and working on public servers. Install FPV on each viewer's PC. Drones, sound, goggles and controller poses are shared automatically through the game server.");
         bool reconnect=ImGui::Checkbox("Enable drone sharing",&syncSettings.enabled);
         reconnect=ImGui::Combo("Connection",&syncSettings.transport,"Automatic / current game server\0Manual UDP relay (fallback)\0")||reconnect;
         if(syncSettings.transport==0){

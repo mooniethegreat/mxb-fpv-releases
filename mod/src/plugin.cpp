@@ -6,6 +6,8 @@
 #include "traffic_collision.h"
 #include "updater.h"
 #include "version.h"
+#include "native_view.h"
+#include "map_hud.h"
 #include "../vendor/minhook/include/MinHook.h"
 #include <bcrypt.h>
 #include <filesystem>
@@ -17,6 +19,7 @@
 #include <cstddef>
 #include <gl/GL.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include "imgui.h"
 #include "backends/imgui_impl_win32.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -42,6 +45,16 @@ AudioSettings audioSettings;
 TrafficCollision traffic;
 Updater updater;
 bool automaticUpdates{true},previewUpdates{true};
+NativeView nativeView;
+MapHud mapHud;
+MapSettings mapSettings;
+bool mapVisible{true},pitScreen{};
+std::atomic<bool> spectatorMode{},spectatorRequested{},exitRequested{};
+Vec3 spectatorSpawn;
+ULONGLONG spectatorTick{};
+std::string spectatorStatus;
+void ExitFpv();
+void StepFlight(float dt);
 bool showControls{true},showDroneHud{true},replaceBikeHud{true};
 FlightSettings flightSettings;
 int presetIndex{};
@@ -100,8 +113,10 @@ Input PollController() {
 }
 
 LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wParam,LPARAM lParam) {
+    if(spectatorMode&&message==WM_KEYDOWN&&wParam==VK_ESCAPE&&!(lParam&(1LL<<30))){exitRequested=true;return 0;}
+    if(spectatorMode&&message==WM_KEYUP&&wParam==VK_ESCAPE)return 0;
     if(message==WM_KEYDOWN && wParam==VK_F9 && !(lParam&(1LL<<30))) {menuRequested=true;return 0;}
-    if((menuOpen||settingsScreen) && overlayReady) {
+    if((menuOpen||settingsScreen||pitScreen) && overlayReady) {
         ImGui::SetCurrentContext(overlayContext);
         ImGui_ImplWin32_WndProcHandler(window,message,wParam,lParam);
         if(menuOpen&&message==WM_KEYDOWN && wParam==VK_ESCAPE) {menuRequested=true;return 0;}
@@ -128,6 +143,7 @@ float Number(const wchar_t* section,const wchar_t* key,float fallback,float mini
     return end==value.c_str() || !std::isfinite(number)?fallback:std::clamp(number,minimum,maximum);
 }
 bool MainCamera(int id) {
+    if(spectatorMode)return id>0&&id==nativeView.Camera();
     // Static traces of the riding and alternate riding view for the pinned build.
     return onTrack && id>0 && id<=12 &&
         (id==*reinterpret_cast<int*>(gameBase+0x4cfb6c) || id==*reinterpret_cast<int*>(gameBase+0x4cfda8));
@@ -169,7 +185,7 @@ std::int64_t NetworkEvent(int kind,std::uintptr_t argument,std::uintptr_t extra)
     if(kind==0x13)peerSync.PumpNative();return result;
 }
 std::int64_t MixAudio(int milliseconds) {
-    float saved[12]{};bool overrideListener=active&&onTrack;
+    float saved[12]{};bool overrideListener=active&&(onTrack||spectatorMode);
     auto listener=reinterpret_cast<float*>(gameBase+0x399608);
     if(overrideListener){
         std::lock_guard<std::mutex> lock(flightMutex);std::memcpy(saved,listener,sizeof(saved));
@@ -189,7 +205,7 @@ void* OwnPhysics() {
     return reinterpret_cast<void*(*)(int)>(gameBase+0x1bf1a0)(handle);
 }
 std::int64_t ParkBike(void* physics,float dt) {
-    if(!active||!onTrack||physics!=OwnPhysics())return originalBikeStep(physics,dt);
+    if(!active||!onTrack||spectatorMode||physics!=OwnPhysics())return originalBikeStep(physics,dt);
     // These are the native normalized control channels, before each physics step.
     // Full brakes, clutch pulled, no throttle/steering/gear requests. No body teleport.
     auto p=static_cast<unsigned char*>(physics);unsigned char saved[0x48]{};std::memcpy(saved,p+0x270,sizeof(saved));
@@ -208,7 +224,9 @@ std::int64_t DroneDashboard(const void* data) {
 }
 void MaxHudDraw(int state,int* quads,void** quadData,int* strings,void** stringData) {
     originalMaxHudDraw(state,quads,quadData,strings,stringData);
-    if(active&&replaceBikeHud&&state==0){*quads=0;*strings=0;}
+    // Preserve the map, standings and unrelated widgets. Hide only bike controls
+    // and instruments, using their configured positions and actual backgrounds.
+    mapHud.External(state,quads,quadData,strings,stringData,active&&replaceBikeHud);
 }
 void DashboardText(int font,float x,float y,float size,std::uint32_t color,const char* text) {
     if(droneDashboard&&font==*reinterpret_cast<int*>(gameBase+0x109dfa4)){
@@ -219,7 +237,7 @@ std::int64_t RenderRider(void* graphics,int* instance,void* physics,int flags) {
     auto result=originalRider(graphics,instance,physics,flags);riderVisuals.Rider(graphics,instance,physics);return result;
 }
 std::int64_t BuildCamera(void* vehicle,void* look,int flags,float lookAxis,void* output) {
-    if(!active)return originalBuilder(vehicle,look,flags,lookAxis,output);
+    if(!active||spectatorMode)return originalBuilder(vehicle,look,flags,lookAxis,output);
     // Use the game's complete external rider representation while the FPV camera
     // is detached. Native first-person mode deliberately hides head/helmet meshes.
     // Restore the selected riding camera immediately after this one build call.
@@ -237,10 +255,13 @@ HRESULT WINAPI ReadDevice(IDirectInputDevice8W* device,DWORD size,void* state) {
     HRESULT result=originalDeviceState(device,size,state);
     if(FAILED(result)||(!active&&!menuOpen)||readingFpv) return result;
     if(size==256) {
-        // Keyboard input for the bike is neutral while flying. Escape still opens the menu.
-        auto escape=static_cast<unsigned char*>(state)[DIK_ESCAPE];
+        auto keyboard=static_cast<unsigned char*>(state);unsigned char saved[256];std::memcpy(saved,keyboard,256);
         std::memset(state,0,size);
-        static_cast<unsigned char*>(state)[DIK_ESCAPE]=escape;
+        keyboard[DIK_ESCAPE]=spectatorMode?0:saved[DIK_ESCAPE];
+        // Keep map/HUD hotkeys usable. Bike axes remain neutral and the native
+        // parking hook still owns throttle, brakes, clutch and gear requests.
+        for(int key:{DIK_M,DIK_TAB,DIK_F10,DIK_F11,DIK_F12})keyboard[key]=saved[key];
+        UINT mapScan=MapVirtualKeyW(static_cast<UINT>(mapSettings.key),MAPVK_VK_TO_VSC);if(mapScan<128)keyboard[mapScan]=saved[mapScan];
     } else if(size==sizeof(DIJOYSTATE) || size==sizeof(DIJOYSTATE2)) {
         std::memset(state,0,size);
         auto joystick=static_cast<DIJOYSTATE*>(state);
@@ -251,7 +272,7 @@ HRESULT WINAPI ReadDevice(IDirectInputDevice8W* device,DWORD size,void* state) {
                 reinterpret_cast<LONG*>(state)[axis]=range.lMin+(range.lMax-range.lMin)/2;
         }
         for(auto& pov:joystick->rgdwPOV) pov=0xffffffff;
-    } else if(menuOpen && (size==sizeof(DIMOUSESTATE)||size==sizeof(DIMOUSESTATE2))) {
+    } else if((menuOpen||spectatorMode) && (size==sizeof(DIMOUSESTATE)||size==sizeof(DIMOUSESTATE2))) {
         std::memset(state,0,size);
     }
     return result;
@@ -351,28 +372,74 @@ HWND FindWindowForGame() {
     },reinterpret_cast<LPARAM>(&result));
     return result;
 }
+void ExitFpv() {
+    active=false;bool spectator=spectatorMode.exchange(false);spectatorRequested=false;
+    if(spectator){nativeView.Leave();Log("FPV spectator returned to pits.");}
+}
+bool EnterSpectator(const Input& input) {
+    if(!supported||!hooksReady||!nativeView.InPits())return false;
+    spectatorMode=true;active=false;
+    if(!nativeView.Enter()){spectatorMode=false;spectatorStatus="Live race view is unavailable. Try again when the track has loaded.";return false;}
+    Vec3 spawn,normal;float height{};
+    bool anchor=mapHud.SpawnPoint(spawn)&&terrain.Sample(spawn.x,spawn.z,height,normal);
+    if(anchor)spawn.y=height;
+    else anchor=terrain.Anchor(spawn);
+    if(!anchor){ExitFpv();spectatorStatus="Track terrain is not ready. Wait for the lobby to finish loading, then try again.";return false;}
+    {
+        std::lock_guard<std::mutex> lock(flightMutex);spectatorSpawn=spawn;flight.Spawn(spawn,0);accumulator=0;flightInput=input;
+    }
+    spectatorTick=GetTickCount64();flyingWithController=input.connected;spectatorStatus.clear();active=true;
+    Log("Pure FPV spectator started from the pits. No rider joined the race.");return true;
+}
 void Update() {
     HWND foreground=GetForegroundWindow();DWORD foregroundProcess{};
     GetWindowThreadProcessId(foreground,&foregroundProcess);
-    if(foregroundProcess!=GetCurrentProcessId()) {active=false;return;}
+    if(foregroundProcess!=GetCurrentProcessId()) {ExitFpv();return;}
     Input input=PollController();
     liveInput=input;
     if(!settingsScreen)menuOpen=false;
-    if(menuRequested.exchange(false)&&settingsScreen) {menuOpen=!menuOpen;active=false;toggleRequested=false;Log(menuOpen?"In-game FPV settings opened.":"In-game FPV settings closed.");}
-    if(active && flyingWithController && !input.connected) {active=false;Log("Controller disconnected. Returned to bike.");}
+    if(menuRequested.exchange(false)&&settingsScreen) {menuOpen=!menuOpen;ExitFpv();toggleRequested=false;Log(menuOpen?"In-game FPV settings opened.":"In-game FPV settings closed.");}
+    if(active && flyingWithController && !input.connected) {ExitFpv();Log("Controller disconnected. FPV exited.");}
     SHORT keyState=GetAsyncKeyState(toggleKey);
     bool key=(keyState&0x8000)!=0;
     bool requested=toggleRequested.exchange(false);
     bool pressed=(originalWindowProc?requested:((key&&!previousToggle)||(keyState&1)))||(input.toggle&&!previousButton);
     previousToggle=key;previousButton=input.toggle;
+    static bool previousMap=false;bool mapKey=(GetAsyncKeyState(mapSettings.key)&0x8000)!=0;
+    if(mapKey&&!previousMap&&!menuOpen&&(onTrack||spectatorMode))mapVisible=!mapVisible;previousMap=mapKey;
     static bool previousReset=false;bool reset=(GetAsyncKeyState('R')&0x8000)!=0;
-    if(active&&reset&&!previousReset){std::lock_guard<std::mutex> lock(flightMutex);flight.Spawn(bikePosition,bikeYaw);accumulator=0;}previousReset=reset;
-    if(active && (!onTrack || GetTickCount64()-telemetryTick>1000 || (GetAsyncKeyState(VK_ESCAPE)&0x8000))) {active=false;Log("FPV exited.");}
-    if(pressed && !menuOpen && onTrack && supported && hooksReady && GetTickCount64()-telemetryTick<1000) {
-        active=!active;
-        if(active) {std::lock_guard<std::mutex> lock(flightMutex);flight.Spawn(bikePosition,bikeYaw);accumulator=0;flyingWithController=input.connected;}
-        Log(active?"FPV entered beside bike.":"Returned to bike.");
+    if(active&&reset&&!previousReset){std::lock_guard<std::mutex> lock(flightMutex);flight.Spawn(spectatorMode?spectatorSpawn:bikePosition,spectatorMode?0:bikeYaw);accumulator=0;}previousReset=reset;
+    if(exitRequested.exchange(false)||(active&&((spectatorMode?!nativeView.InLiveView():(!onTrack||GetTickCount64()-telemetryTick>1000))||(GetAsyncKeyState(VK_ESCAPE)&0x8000)))){ExitFpv();pressed=false;}
+    if(spectatorRequested.exchange(false)){EnterSpectator(input);pressed=false;}
+    if(pressed&&!menuOpen){
+        if(active)ExitFpv();
+        else if(nativeView.InPits())EnterSpectator(input);
+        else if(onTrack&&supported&&hooksReady&&GetTickCount64()-telemetryTick<1000){
+            std::lock_guard<std::mutex> lock(flightMutex);flight.Spawn(bikePosition,bikeYaw);accumulator=0;flyingWithController=input.connected;active=true;Log("FPV entered beside bike.");
+        }
     }
+}
+void StepFlight(float dt) {
+    // Caller owns flightMutex. Both modes use the same fixed-step simulation;
+    // only the clock changes when riding telemetry is unavailable in the pits.
+    Input input=PollController();
+    if(!input.connected) {
+        input.throttle=flightSettings.mode3d?0.5f+flightSettings.HoverThrottle()*0.5f:flightSettings.HoverThrottle();
+        if(GetAsyncKeyState(VK_SPACE)&0x8000)input.throttle=0.75f;
+        if(GetAsyncKeyState(VK_CONTROL)&0x8000)input.throttle=0;
+        input.pitch=((GetAsyncKeyState('W')&0x8000)?1.0f:0)-((GetAsyncKeyState('S')&0x8000)?1.0f:0);
+        input.roll=((GetAsyncKeyState('D')&0x8000)?1.0f:0)-((GetAsyncKeyState('A')&0x8000)?1.0f:0);
+        input.yaw=((GetAsyncKeyState('E')&0x8000)?1.0f:0)-((GetAsyncKeyState('Q')&0x8000)?1.0f:0);
+    }
+    flightInput=input;
+    if(flightSettings.collisions) {
+        float height{};Vec3 normal;
+        if(!terrain.Sample(flight.position.x,flight.position.z,height,normal)){active=false;if(spectatorMode)exitRequested=true;Log("FPV returned: no valid terrain under drone. Ground collision remains enabled.");return;}
+    }
+    auto ground=flightSettings.collisions?terrain.World():CollisionWorld{};
+    traffic.Capture(gameBase,dt,flightSettings.vehicleCollisions,ground);auto world=traffic.World();
+    accumulator+=std::clamp(dt,0.0f,0.05f);
+    while(accumulator>=0.004f){flight.Step(input,flightSettings,0.004f,&world);accumulator-=0.004f;}
 }
 std::string Utf8(const std::wstring& value) {
     if(value.empty())return {};
@@ -433,6 +500,10 @@ void SaveSettings() {
     ok=write(L"Multiplayer",L"Room",std::wstring(syncSettings.room.begin(),syncSettings.room.end()))&&ok;
     ok=write(L"Updates",L"Automatic",automaticUpdates?L"1":L"0")&&ok;
     ok=write(L"Updates",L"TesterReleases",previewUpdates?L"1":L"0")&&ok;
+    ok=write(L"Map",L"Enabled",mapSettings.enabled?L"1":L"0")&&ok;
+    ok=write(L"Map",L"UseExistingHudMap",mapSettings.external?L"1":L"0")&&ok;
+    ok=write(L"Map",L"Size",std::to_wstring(mapSettings.size))&&ok;
+    ok=write(L"Map",L"ToggleKey",std::to_wstring(mapSettings.key))&&ok;
     Log(ok?"In-game controls and flight settings saved.":"Could not save all FPV settings.");
 }
 void ReloadController() {
@@ -480,14 +551,18 @@ BOOL WINAPI RenderFrame(HDC dc) {
     }
     ImGui::SetCurrentContext(overlayContext);
     settingsScreen=GameSettingsPage(gameBase);
+    pitScreen=nativeView.InPits();
     Update();
-    PeerState own;own.race=riderVisuals.OwnRace();own.flying=active;own.preset=presetIndex;
+    if(active&&spectatorMode){auto now=GetTickCount64();float dt=(now-spectatorTick)*0.001f;spectatorTick=now;std::lock_guard<std::mutex> lock(flightMutex);StepFlight(dt);}
+    PeerState own;own.race=spectatorMode?900000+nativeView.Connection():riderVisuals.OwnRace();own.flying=active;own.preset=presetIndex;
     {std::lock_guard<std::mutex> lock(flightMutex);own.position=flight.position;own.rotation=flight.rotation;own.velocity=flight.velocity;own.motor=flight.crashed?0:std::max(0.02f,std::abs(flight.motorOutput));own.activity=std::max({std::abs(flightInput.roll),std::abs(flightInput.pitch),std::abs(flightInput.yaw)});own.propInches=flightSettings.propInches;}
-    peerSync.Tick(own);auto peers=peerSync.Peers();riderVisuals.States(own.race,own.flying,peers);droneAudio.Submit(own,peers,audioSettings,onTrack);
+    peerSync.Tick(own);auto peers=peerSync.Peers();riderVisuals.States(own.race,own.flying,peers);droneAudio.Submit(own,peers,audioSettings,onTrack||spectatorMode);
     RECT viewport{};GetClientRect(gameWindow,&viewport);riderVisuals.Draw(viewport.right,viewport.bottom);
     ImGui_ImplOpenGL3_NewFrame();ImGui_ImplWin32_NewFrame();
     ImGui::GetIO().MouseDrawCursor=menuOpen||settingsScreen;
-    ImGui::NewFrame();Overlay();FlightOsd();ImGui::Render();
+    ImGui::NewFrame();PitEntry();Overlay();
+    if((onTrack||spectatorMode)&&!settingsScreen&&!menuOpen)mapHud.Draw(mapSettings,mapVisible,own,peers);
+    FlightOsd();ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     ImGui::SetCurrentContext(previous);
     return originalSwap(dc);
@@ -506,6 +581,13 @@ EXPORT int Startup(char*) {
     gameBase=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     supported=VerifyBuild();
     if(!supported) {Log("Unsupported executable. FPV hooks disabled.");return 0;}
+    Log(nativeView.Initialize(gameBase)?"Pit-screen live spectator adapter verified.":"Pit-screen adapter unavailable: native signature mismatch.");
+    wchar_t documents[MAX_PATH]{};
+    if(SUCCEEDED(SHGetFolderPathW(nullptr,CSIDL_PERSONAL,nullptr,SHGFP_TYPE_CURRENT,documents)))mapHud.Configure(std::filesystem::path(documents)/L"PiBoSo"/L"MX Bikes"/L"MaxHUD.ini");
+    mapSettings.enabled=Number(L"Map",L"Enabled",1,0,1)!=0;
+    mapSettings.external=Number(L"Map",L"UseExistingHudMap",1,0,1)!=0;
+    mapSettings.size=Number(L"Map",L"Size",280,180,460);
+    mapSettings.key=static_cast<int>(Number(L"Map",L"ToggleKey",'M',1,254));
     automaticUpdates=Number(L"Updates",L"Automatic",1,0,1)!=0;
     previewUpdates=Number(L"Updates",L"TesterReleases",1,0,1)!=0;
     updater.Start(automaticUpdates,previewUpdates);
@@ -581,11 +663,11 @@ EXPORT int Startup(char*) {
     syncSettings.room=Utf8(Setting(L"Multiplayer",L"Room",L"mx-fpv"));
     peerSync.Configure(syncSettings);
     hooksReady=InstallHooks();
-    Log(hooksReady?"MXB FPV 0.6 initialized. F8 toggles FPV; Settings > FPV configures the drone.":"Hook installation failed. FPV unavailable.");
+    Log(hooksReady?"MXB FPV 0.7 initialized. Multiplayer supported; pit spectator, map and centered OSD ready for review.":"Hook installation failed. FPV unavailable.");
     return 0;
 }
 EXPORT void Shutdown(){
-    active=false;menuOpen=false;peerSync.Close();
+    active=false;spectatorMode=false;nativeView.Forget();menuOpen=false;peerSync.Close();
     updater.Close();
     if(originalWindowProc&&IsWindow(gameWindow)&&reinterpret_cast<WNDPROC>(GetWindowLongPtrW(gameWindow,GWLP_WNDPROC))==WindowProc)SetWindowLongPtrW(gameWindow,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(originalWindowProc));
     if(supported){MH_DisableHook(MH_ALL_HOOKS);MH_Uninitialize();}
@@ -594,46 +676,35 @@ EXPORT void Shutdown(){
     controller.Close();for(auto& hook:xhooks)if(hook.library){FreeLibrary(hook.library);hook.library=nullptr;}
 }
 EXPORT void RunStart(){onTrack=true;Log("Riding simulation started.");}
-EXPORT void RunStop(){onTrack=false;active=false;Log("Riding simulation paused.");}
-EXPORT void RunDeinit(){onTrack=false;active=false;}
+EXPORT void RunStop(){onTrack=false;if(!spectatorMode)active=false;Log("Riding simulation paused.");}
+EXPORT void RunDeinit(){onTrack=false;if(!spectatorMode)active=false;}
 EXPORT void RunTelemetry(void* data,int size,float time,float) {
     // Official interface v8. World position follows six 32-bit fields.
     if(!data || size<120) return;
     const float* fields=static_cast<const float*>(data);
-    if(!std::isfinite(fields[6])||!std::isfinite(fields[7])||!std::isfinite(fields[8])||!std::isfinite(fields[24])){active=false;return;}
+    if(!std::isfinite(fields[6])||!std::isfinite(fields[7])||!std::isfinite(fields[8])||!std::isfinite(fields[24])){if(!spectatorMode)active=false;return;}
     std::lock_guard<std::mutex> lock(flightMutex);
     bikePosition={fields[6],fields[7],fields[8]};
     bikeYaw=fields[24];
     static bool reported=false;if(!reported){Log("Live bike telemetry received.");reported=true;}
     telemetryTick=GetTickCount64();
     float dt=time-previousTelemetryTime;previousTelemetryTime=time;
-    if(!active)return;
+    if(!active||spectatorMode)return;
     if(dt<=0||dt>0.1f)dt=0.01f;
-    Input input=PollController();
-    if(!input.connected) {
-        input.throttle=flightSettings.mode3d?0.5f+flightSettings.HoverThrottle()*0.5f:flightSettings.HoverThrottle();
-        if(GetAsyncKeyState(VK_SPACE)&0x8000)input.throttle=0.75f;
-        if(GetAsyncKeyState(VK_CONTROL)&0x8000)input.throttle=0;
-        input.pitch=((GetAsyncKeyState('W')&0x8000)?1.0f:0)-((GetAsyncKeyState('S')&0x8000)?1.0f:0);
-        input.roll=((GetAsyncKeyState('D')&0x8000)?1.0f:0)-((GetAsyncKeyState('A')&0x8000)?1.0f:0);
-        input.yaw=((GetAsyncKeyState('E')&0x8000)?1.0f:0)-((GetAsyncKeyState('Q')&0x8000)?1.0f:0);
-    }
-    flightInput=input;
-    if(flightSettings.collisions) {
-        float height{};Vec3 normal;
-        if(!terrain.Sample(flight.position.x,flight.position.z,height,normal)){active=false;Log("FPV returned: no valid terrain under drone. Ground collision remains enabled.");return;}
-    }
-    auto ground=flightSettings.collisions?terrain.World():CollisionWorld{};
-    traffic.Capture(gameBase,dt,flightSettings.vehicleCollisions,ground);auto world=traffic.World();
-    accumulator+=std::min(dt,0.05f);
-    while(accumulator>=0.004f){flight.Step(input,flightSettings,0.004f,&world);accumulator-=0.004f;}
+    StepFlight(dt);
 }
+EXPORT void TrackCenterline(int count,fpv::TrackSegment* segments,void*){mapHud.Centerline(count,segments);}
+EXPORT void RaceEvent(void*,int){mapHud.Reset(false);}
+EXPORT void RaceDeinit(){if(!spectatorMode)active=false;mapHud.Reset(false);}
+EXPORT void EventDeinit(){if(!spectatorMode)active=false;onTrack=false;mapHud.Reset(true);}
+EXPORT void RaceRemoveEntry(void* data,int size){if(data&&size>=4)mapHud.Remove(*static_cast<const int*>(data));}
+EXPORT void RaceTrackPosition(int count,void* data,int stride){mapHud.Positions(count,data,stride);}
 EXPORT int DrawInit(int* sprites,char** spriteNames,int* fonts,char** fontNames) {
     *sprites=0;*spriteNames=nullptr;*fonts=0;*fontNames=nullptr;return 0;
 }
 EXPORT void Draw(int state,int* numQuads,void**,int* numStrings,void**) {
     *numQuads=0;*numStrings=0;
-    if(state!=0) {active=false;return;}
+    if(state!=0&&!(spectatorMode&&nativeView.InLiveView())) {active=false;return;}
     static bool reported=false;if(!reported){Log("Live Draw callback received.");reported=true;}
 }
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID){if(reason==DLL_PROCESS_ATTACH){module=instance;DisableThreadLibraryCalls(instance);}return TRUE;}

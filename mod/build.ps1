@@ -20,7 +20,7 @@ try {
     if ($LASTEXITCODE) { throw 'MinHook decoder failed' }
     $imgui = Join-Path $root 'vendor\imgui'
     $uiSources = @('imgui.cpp','imgui_draw.cpp','imgui_tables.cpp','imgui_widgets.cpp','backends\imgui_impl_win32.cpp','backends\imgui_impl_opengl3.cpp') | ForEach-Object { Join-Path $imgui $_ }
-    $sources = @('plugin.cpp','controller.cpp','terrain.cpp','peer_sync.cpp','rider_visuals.cpp','drone_audio.cpp','traffic_collision.cpp','updater.cpp') | ForEach-Object { Join-Path $root "src\$_" }
+    $sources = @('plugin.cpp','controller.cpp','terrain.cpp','peer_sync.cpp','rider_visuals.cpp','drone_audio.cpp','traffic_collision.cpp','updater.cpp','native_view.cpp','map_hud.cpp') | ForEach-Object { Join-Path $root "src\$_" }
     $audioResources = for($i=0;$i -lt 6;$i++) { $asset=Join-Path $root "assets\audio\kino-drone-$i.wav"; if(!(Test-Path -LiteralPath $asset)){throw "Missing drone audio asset $asset"}; "$($i+201) RCDATA `"$($asset.Replace('\','/'))`"" }
     Set-Content -LiteralPath 'drone_audio.rc' -Value $audioResources -Encoding ascii
     & rc /nologo /fo drone_audio.res drone_audio.rc

@@ -16,8 +16,10 @@ The game server does not need an FPV plugin. Each client displaying drones still
 needs FPV code/assets, so installing only on the host cannot make stock viewers
 render or hear a custom drone.
 
-This is a static finding and a compiled implementation. Successful two-client
-runtime operation remains unverified and belongs to the user's testers.
+The user tested 0.6 in public servers and confirmed successful multiplayer
+operation. Multiplayer support is tested and working. The static observations
+below explain the implementation; they are distinct from the user's runtime
+confirmation. The user subsequently reviewed 0.7 and approved it for release.
 
 ## Observed native path
 
@@ -94,7 +96,7 @@ APIs. That was investigated as an alternative, but is not used by this build:
 the existing native server forwarding path avoids adding a second matchmaking
 system or dependence on Steam relay availability.
 
-## Runtime questions for the testers
+## Additional regression coverage
 
 - Two 0.6 clients on the same stock server discover each other automatically.
 - Each sees/hears the other's flying drone; returning to bike removes it.
@@ -103,4 +105,6 @@ system or dependence on Steam relay availability.
 - No discovery text or UI noise appears on stock clients, and 20 Hz state traffic
   coexists with normal riding/livery messages without significant queue delay.
 
-These checks have not been run by the coding agent, as requested.
+The user reports that public-server multiplayer works perfectly. The list above
+remains useful for less common rejoin/map-change cases; it does not imply the
+coding agent performed those individual scenarios. No game was launched here.

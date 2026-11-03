@@ -4,7 +4,7 @@ $root=$PSScriptRoot
 $versionText=Get-Content -LiteralPath (Join-Path $root 'mod\src\version.h') -Raw
 if($versionText -notmatch 'Version\[\]\s*=\s*"(\d+\.\d+(?:\.\d+)?)"'){throw 'Version header could not be read'}
 $version=$Matches[1]
-$out=Join-Path $root 'out'
+$out=Join-Path $root "out\$version"
 $dist=Join-Path $root 'mod\dist'
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 $installerName="MXB-FPV-$version-Setup.exe"
@@ -32,6 +32,6 @@ $manifestPath=Join-Path $root 'update.json'
 $feed=if(Test-Path -LiteralPath $manifestPath){Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -AsHashtable}else{@{schema=1;stable=$null;preview=$null}}
 $installer=$entries | Where-Object File -EQ $installerName
 if($versionText -notmatch 'SupportedGameHash\[\]\s*=\s*"([0-9a-f]{64})"'){throw 'Supported game hash could not be read'}
-$feed[$Channel]=@{version=$version;notes='Automatic multiplayer drone sharing, in-game receiver/rates/presets, spatial drone audio and optional verified GitHub updates. Tester release: new sharing awaits live multiplayer validation.';game_sha256=@($Matches[1]);installer=@{sha256=$installer.SHA256;bytes=$installer.Bytes}}
+$feed[$Channel]=@{version=$version;notes='Multiplayer is tested and working on public servers. 0.7 adds Fly FPV from mid-race pits, numbered riders and drone icons on the map, retained map controls and a centered flight display. Reviewed and approved for release.';game_sha256=@($Matches[1]);installer=@{sha256=$installer.SHA256;bytes=$installer.Bytes}}
 $feed | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out 'update.json') -Encoding utf8NoBOM
 Write-Output "Prepared FPV $version assets in $out. The live update feed was not changed."

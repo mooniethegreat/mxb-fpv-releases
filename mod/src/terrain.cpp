@@ -53,6 +53,18 @@ bool Terrain::Sample(float x,float z,float& height,Vec3& normal) const {
     for(int slot=0;slot<3;slot++)if(HeaderAndQuery(base_,slot,x,z,&height,&normal))return true;
     return false;
 }
+bool Terrain::Anchor(Vec3& position) const {
+    if(!ready_)return false;
+    __try {
+        for(int slot=0;slot<3;slot++){
+            auto track=base_+SlotsRva+slot*0x6160;
+            float sx=*reinterpret_cast<const float*>(track+0x758),sz=*reinterpret_cast<const float*>(track+0x75c);
+            float ox=*reinterpret_cast<const float*>(track+0x764),oz=*reinterpret_cast<const float*>(track+0x76c);
+            if(!std::isfinite(sx)||!std::isfinite(sz)||sx<1||sz<1||sx>20000||sz>20000)continue;
+            Vec3 p{ox+sx*0.5f,0,oz+sz*0.5f},normal;if(Sample(p.x,p.z,p.y,normal)){position=p;return true;}
+        }
+    }__except(EXCEPTION_EXECUTE_HANDLER){}return false;
+}
 bool Terrain::Sweep(void* context,Vec3 from,Vec3 to,float radius,Contact& contact) {
     auto terrain=static_cast<Terrain*>(context);
     int steps=std::clamp(static_cast<int>(std::ceil(Length(to-from)/std::max(0.025f,radius*0.5f))),1,64);

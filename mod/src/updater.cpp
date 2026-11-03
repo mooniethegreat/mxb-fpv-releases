@@ -57,7 +57,7 @@ std::string Hash(const std::vector<unsigned char>& bytes) {
     char hex[65]{};for(int i=0;i<32;i++)sprintf_s(hex+2*i,3,"%02x",digest[i]);return hex;
 }
 std::vector<unsigned char> Fetch(const std::wstring& host,const std::wstring& path,size_t limit,const std::atomic<bool>& stop) {
-    HttpHandle session(WinHttpOpen(L"MXB-FPV/0.6",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
+    HttpHandle session(WinHttpOpen((L"MXB-FPV/"+std::wstring(winrt::to_hstring(Version))).c_str(),WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     WinHttpSetTimeouts(session,4000,4000,4000,4000);
     HttpHandle connection(WinHttpConnect(session,host.c_str(),INTERNET_DEFAULT_HTTPS_PORT,0));
     HttpHandle request(WinHttpOpenRequest(connection,L"GET",path.c_str(),nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE|WINHTTP_FLAG_REFRESH));

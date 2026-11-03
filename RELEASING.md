@@ -20,10 +20,10 @@ For a new release:
 Use PowerShell 7 for the packaging script, plus Visual Studio 2022 C++ Build Tools and a Windows SDK for compilation.
 
 1. Update `mod/src/version.h`, visible version labels, README and release notes. A changed game binary also requires revalidating the native adapters; changing a hash alone is insufficient.
-2. Run `./mod/build.ps1 -SkipTests`, then `./Package.ps1 -Channel preview`. This creates the installer, tester ZIP, source ZIP, checksums and a **proposed** manifest in `out/update.json`.
-3. Commit the source/docs and push `main`. Create a **draft** GitHub release tagged `v<version>` at that commit. Upload all assets from `out` except `update.json`.
-4. Check that uploaded asset sizes and SHA-256 digests match `out/SHA256SUMS.txt`. Publish the release; mark preview versions as prereleases.
-5. Only after assets are public, replace the root `update.json` with `out/update.json`, commit it and push `main`. This prevents the updater offering an unavailable installer.
+2. Run `./mod/build.ps1 -SkipTests`, then `./Package.ps1 -Channel preview`. This creates the installer, tester ZIP, source ZIP, checksums and a **proposed** manifest in `out/<version>/update.json`.
+3. After the user's review/authorization, commit the source/docs and push `main`. Create a **draft** GitHub release tagged `v<version>` at that commit. Upload the assets from `out/<version>` except `update.json`.
+4. Check that uploaded asset sizes and SHA-256 digests match `out/<version>/SHA256SUMS.txt`. Publish the release; mark preview versions as prereleases.
+5. Only after assets are public, replace the root `update.json` with `out/<version>/update.json`, commit it and push `main`. This prevents the updater offering an unavailable installer.
 
 Use `-Channel stable` only for a release you intend to call stable. Preview releases should be tested with multiple clients before promotion. Preserve the other channel when updating a manifest.
 

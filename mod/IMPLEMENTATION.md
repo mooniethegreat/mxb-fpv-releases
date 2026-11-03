@@ -1,8 +1,9 @@
-# MXB FPV 0.6 implementation
+# MXB FPV 0.7 implementation
 
-The user confirmed 0.4 flight, radio and multiplayer chase. This revision is
-compiled only: runtime, audio, UI and multiplayer verification is assigned to
-the user's testers. Do not describe these additions as runtime-proven.
+The user confirmed successful 0.6 multiplayer operation on public servers.
+Multiplayer support is tested and working. The user reviewed the 0.7
+spectator/map/OSD build and authorized its release and update-feed publication.
+The coding agent did not launch the game.
 
 SDK: data version 8, interface 9. Pinned executable SHA256:
 `9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291`.
@@ -104,3 +105,10 @@ Sound provenance: assets/audio/PROVENANCE.txt. No game, Unity, Rewired or FMOD
 executable is in the deliverables. Generated procedural accessories remain native.
 
 Native sync evidence: research/mxbikes-local/native-sync-evidence.json.
+
+0.7 spectator/map architecture and static evidence: SPECTATOR-MAP.md. The pit
+entry uses the existing live race-view mode, not To Track/Join. Spectator flight
+has its own render clock and main-camera selection. Riding flight keeps the
+telemetry clock; both call the same fixed-step simulation. The SDK map callbacks
+provide track geometry and rider identities. MaxHUD output is filtered by widget
+bounds instead of blanking all drawing. The map and standings remain available.

@@ -137,7 +137,7 @@ HWND Control(HWND window,const wchar_t* type,const wchar_t* text,DWORD style,int
 LRESULT CALLBACK Proc(HWND window,UINT message,WPARAM wParam,LPARAM lParam) {
     if(message==WM_CREATE) {
         font=static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        Control(window,L"STATIC",L"MX Bikes FPV 0.6 - automatic multiplayer sync candidate",0,22,20,620,25);
+        Control(window,L"STATIC",L"MX Bikes FPV 0.7",0,22,20,620,25);
         Control(window,L"STATIC",L"F8 while riding: enter FPV beside your bike / return to the bike.\nIn game: Settings > FPV Drone Settings for live stick mapping and drone presets.",0,22,55,620,48);
         Control(window,L"STATIC",L"MX Bikes installation folder",0,22,120,620,22);
         pathEdit=Control(window,L"EDIT",Detect().c_str(),ES_AUTOHSCROLL|WS_TABSTOP,22,145,485,28);
@@ -147,7 +147,7 @@ LRESULT CALLBACK Proc(HWND window,UINT message,WPARAM wParam,LPARAM lParam) {
         Control(window,L"BUTTON",L"Uninstall",BS_PUSHBUTTON|WS_TABSTOP,337,195,140,38,4);
         Control(window,L"BUTTON",L"Roll back",BS_PUSHBUTTON|WS_TABSTOP,492,195,130,38,5);
         statusLabel=Control(window,L"STATIC",L"Close MX Bikes before installing. Existing controller settings are preserved.",0,22,256,600,55);
-        Control(window,L"STATIC",L"Shared drones and sound through the game server - no separate relay setup.\nAll viewers need FPV 0.6. Includes collisions, rates, 3D mode and in-game settings.",0,22,326,610,45);return 0;
+        Control(window,L"STATIC",L"Multiplayer tested on public servers. Fly FPV from the pits during a race.\n0.7 adds spectator flight, rider/drone map markers and a centered flight display.",0,22,326,610,45);return 0;
     }
     if(message==WM_COMMAND) {
         try {

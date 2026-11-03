@@ -10,6 +10,7 @@ class Terrain {
 public:
     bool Initialize(std::uintptr_t base);
     bool Sample(float x,float z,float& height,Vec3& normal) const;
+    bool Anchor(Vec3& position) const;
     bool Ready() const {return ready_;}
     CollisionWorld World() {return {this,Sweep};}
 };

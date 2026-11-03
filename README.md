@@ -4,9 +4,11 @@
 
 Fly an FPV drone in MX Bikes and chase your friends around the track. Made by **Moonie the Great**.
 
-**[Download 0.6 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v0.6/MXB-FPV-0.6-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v0.6)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
+**[Download 0.7 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v0.7/MXB-FPV-0.7-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v0.7)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
 
-0.6 is a **tester release** for Windows 64-bit and MX Bikes beta 21e (Steam build 23566986). The earlier camera/controller chase worked in game. The new multiplayer sharing and updater are compiled and ready for testers; they still need a live multiplayer session to confirm their behavior.
+**Multiplayer is tested and working on public servers.** Supports Windows 64-bit and MX Bikes beta 21e (Steam build 23566986).
+
+**0.7 is available.** Fly FPV from the mid-race pit screen, find riders and drones on the map, and use the centered flight display. See [what changed in 0.7](CHANGELOG-0.7.md).
 
 ## Install and fly
 
@@ -17,6 +19,10 @@ Fly an FPV drone in MX Bikes and chase your friends around the track. Made by **
 5. Join the track and press **F8** to spawn beside your bike and fly. Press F8 again to return.
 
 **R** resets a crashed drone. **Escape**, pausing or losing focus returns you to the bike. You can bind a radio switch instead of F8. Click **Save** after changing settings.
+
+Joined during a race? From the multiplayer pit screen, click **Fly FPV** beside Select Gate on Event Info, or in the bottom bar on other tabs. F8 also starts drone spectator mode from the pits. Your bike stays out of the race; F8 or Escape returns you to the pits.
+
+Press **M** to toggle the FPV map while riding or flying. Riders have numbered markers; your drone is green and other drones are orange. Map options are under **Audio & display → Map**. The controls sit at bottom center with drone speed close to their right.
 
 DJI FPV radio defaults: roll axis 0, pitch axis 1, yaw axis 3, throttle axis 2. Your saved mapping stays in place when you update.
 
@@ -32,7 +38,7 @@ The bike brakes while you fly. The drone has terrain contact, bounce and crashes
 
 ## Multiplayer
 
-Install **0.6 on every PC that wants to see and hear drones**, then join the same server. Automatic sharing uses the existing game connection. The server is intended to work without modification or an extra relay; this new path is awaiting live testing.
+Install **0.6 or later on every PC that wants to see and hear drones**, then join the same server. Automatic sharing uses the existing game connection. Public-server multiplayer has been tested successfully; the server needs no modification or extra relay.
 
 People without the mod can still ride while you chase them. They cannot see the custom drones, goggles or controller, or hear the drone audio. Installing only on the host does not add these features to unmodified clients.
 
@@ -40,7 +46,7 @@ The Multiplayer settings page shows discovery status. A manual UDP relay remains
 
 ## Updates and removal
 
-**Settings → FPV Drone → Updates** checks this repository in the background, at most once per six hours across game launches. You can check manually, disable checks or choose stable releases only. Tester releases are enabled for 0.6.
+**Settings → FPV Drone → Updates** checks this repository in the background, at most once per six hours across game launches. You can check manually, disable checks or choose stable releases only. Tester releases are enabled by default; 0.7 is published in that channel.
 
 Downloads happen only when you click **Download verified installer**. The checker verifies file size, SHA-256 and game-build compatibility. Open the download folder, close the game, then run Setup. It preserves your radio mapping and keeps the previous plugin; **Roll back** restores it. Nothing installs automatically while you play.
 
