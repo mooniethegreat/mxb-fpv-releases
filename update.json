@@ -2,14 +2,14 @@
   "schema": 1,
   "stable": null,
   "preview": {
-    "notes": "Automatic multiplayer drone sharing, in-game receiver/rates/presets, spatial drone audio and optional verified GitHub updates. Tester release: new sharing awaits live multiplayer validation.",
-    "installer": {
-      "sha256": "2416b640b639eacb8078067c9434b230efa5ab31af4fc731918bc89f0fe4a2e8",
-      "bytes": 4590592
-    },
-    "version": "0.6",
     "game_sha256": [
       "9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291"
-    ]
+    ],
+    "notes": "Multiplayer is tested and working on public servers. 0.7 adds Fly FPV from mid-race pits, numbered riders and drone icons on the map, retained map controls and a centered flight display. Reviewed and approved for release.",
+    "version": "0.7",
+    "installer": {
+      "bytes": 4641280,
+      "sha256": "9f334076848ad333da7829728a0a7f01be6d3fbbb1e6c2a570f4e9f7d6b5a3c5"
+    }
   }
 }
