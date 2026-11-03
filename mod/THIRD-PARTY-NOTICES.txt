@@ -1,0 +1,36 @@
+MXB FPV third-party notices
+
+MinHook v1.3.4, commit c3fcafdc10146beb5919319d0683e44e3c30d537
+https://github.com/TsudaKageyu/minhook
+BSD 2-Clause. Full notices: MinHook-LICENSE.txt.
+
+Dear ImGui v1.91.9b, commit f5befd2d29e66809cd1110a152e375a7f1981f06
+https://github.com/ocornut/imgui
+MIT. Full notices: ImGui-LICENSE.txt.
+
+FrostMod, commit 6aae5a41c27dbc10f3cbc8cc8058e72a37269914
+https://github.com/Frostn1/frostmod
+Copyright (c) 2026 Frostn1. MIT. Full license: FrostMod-LICENSE.txt.
+Its published terrain sampler and UI page layout informed terrain.cpp. These
+interfaces were also corroborated against the local runtime .text snapshot.
+FrostMod itself is not included or installed by this package.
+
+Kino / KiNO Mod by trbflxr and the Kino team:
+https://github.com/trbflxr/kino
+The six drone soundbank subsounds in Data/Bundles/drone_win.knd (reference
+commit 49f2b8, full revision recorded in assets/audio/PROVENANCE.txt) supply
+the motor/air samples embedded in this multiplayer test candidate.
+They are decoded to mono PCM, with short loop-splice crossfades. The native
+RPM/load/speed crossfader is a new implementation, not the original FMOD mix.
+Audio remains credited to its original creators. No ownership or license to
+the original sounds is claimed by this project.
+Kino executable code, CarX, Unity, Rewired and the FMOD runtime are not included.
+Drone simulation, hardware abstraction and procedural meshes are new native code.
+
+Rate curve references: Betaflight's five rate models, mathematical response
+curves implemented independently in flight.h:
+https://github.com/betaflight/betaflight/blob/master/src/main/fc/rc.c
+
+Preset references (profiles are inspired approximations, not measured aircraft models):
+https://betafpv.com/products/pavo20-brushless-whoop-quadcopter
+https://repair.dji.com/help/content?customId=en-us03400006564&lang=en&re=US&spaceId=34

@@ -1,0 +1,19 @@
+Kino drone sound resource provenance
+Repository: https://github.com/trbflxr/kino
+Reference revision: 49f2b8cd3a14ad87fef798ac9d0217315edc317c
+Source: Data/Bundles/drone_win.knd
+Source SHA256: 87f5d2e8a247dbd6c7a73690f5502e27e250a4096b7339485dca676e6ae7be11
+Static format: 12-byte KND header, repeating XOR key 4b6d2b6f -> UnityFS.
+TextAsset: drone (RIFF FEV bank); embedded FSB5 begins at byte 7904.
+Six Vorbis subsounds decoded offline to PCM at their native 44100 Hz.
+Original stereo downmixed by averaging channels, then 20 ms loop-splice overlap.
+Runtime uses mono PCM16 only. No FMOD DLL is packaged.
+Decoder tooling: UnityPy 1.25.4, fmod_toolkit 0.1.3, pyfmodex 0.7.2.
+The original bank and sound creators retain their rights and attribution.
+This tester build ports samples with a new native RPM/load/airspeed mix.
+kino-drone-0.wav: e9d0d9eddfffef3c38bccfa38cb568d8988b0dd4bc6c46b5debbb3215156a6cf
+kino-drone-1.wav: 9a555d6f52277ff1afcf4a34d97371568283f408e5db76c637c6af87d68c7e3e
+kino-drone-2.wav: 771a5169520c3a521a8cc66e9ae194f8150acc78fc50112976f38af17758f391
+kino-drone-3.wav: e231b7330aea77dabe81a9c719b9847a5882a19c4c8caec552e7d0f8287ead7a
+kino-drone-4.wav: 1d2dda0092ff853bc08292e241e4bbb4de1b5795833117bebd90746ae65d03a0
+kino-drone-5.wav: ca948027e6b76cdcd535d430228903143a1228ea7e7333cbeb2507be4e203958

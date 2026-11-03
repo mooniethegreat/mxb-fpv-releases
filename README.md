@@ -1,0 +1,61 @@
+# MXB FPV
+
+![MXB FPV cover artwork](assets/cover.png)
+
+Fly an FPV drone in MX Bikes and chase your friends around the track. Made by **Moonie the Great**.
+
+**[Download 0.6 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v0.6/MXB-FPV-0.6-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v0.6)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
+
+0.6 is a **tester release** for Windows 64-bit and MX Bikes beta 21e (Steam build 23566986). The earlier camera/controller chase worked in game. The new multiplayer sharing and updater are compiled and ready for testers; they still need a live multiplayer session to confirm their behavior.
+
+## Install and fly
+
+1. Close MX Bikes.
+2. Download the installer above, open it, and select the folder containing `mxbikes.exe`.
+3. Click **Install**, then start the game yourself.
+4. Open the game's **Settings**, then **FPV Drone [F9]**. Connect your USB FPV radio or gamepad and check the live input bars.
+5. Join the track and press **F8** to spawn beside your bike and fly. Press F8 again to return.
+
+**R** resets a crashed drone. **Escape**, pausing or losing focus returns you to the bike. You can bind a radio switch instead of F8. Click **Save** after changing settings.
+
+DJI FPV radio defaults: roll axis 0, pitch axis 1, yaw axis 3, throttle axis 2. Your saved mapping stays in place when you update.
+
+## What you can change
+
+- Live receiver mapping, inversion, deadband and a radio mode switch.
+- Betaflight, Raceflight, KISS, Actual and Quick rates, with separate curves for each axis.
+- Throttle mid/expo/limit and optional reversible **3D mode**.
+- 3-inch and 5-inch freestyle, 5-inch race, cinewhoop, Pavo20-inspired and DJI FPV-inspired presets. Tune props, battery, mass, thrust, camera tilt and FOV yourself.
+- Drone sound, nearby drone volume, goggles/controller appearance and the mapped control display.
+
+The bike brakes while you fly. The drone has terrain contact, bounce and crashes against approximate bike/rider collision volumes. The FPV dashboard shows drone speed in your chosen game units.
+
+## Multiplayer
+
+Install **0.6 on every PC that wants to see and hear drones**, then join the same server. Automatic sharing uses the existing game connection. The server is intended to work without modification or an extra relay; this new path is awaiting live testing.
+
+People without the mod can still ride while you chase them. They cannot see the custom drones, goggles or controller, or hear the drone audio. Installing only on the host does not add these features to unmodified clients.
+
+The Multiplayer settings page shows discovery status. A manual UDP relay remains available as a fallback.
+
+## Updates and removal
+
+**Settings → FPV Drone → Updates** checks this repository in the background, at most once per six hours across game launches. You can check manually, disable checks or choose stable releases only. Tester releases are enabled for 0.6.
+
+Downloads happen only when you click **Download verified installer**. The checker verifies file size, SHA-256 and game-build compatibility. Open the download folder, close the game, then run Setup. It preserves your radio mapping and keeps the previous plugin; **Roll back** restores it. Nothing installs automatically while you play.
+
+To remove the mod, close the game and choose **Uninstall** in Setup. Your settings and logs are kept. Other mods and the game executable are left alone.
+
+## Known limits
+
+Scenery meshes such as fences and overhead bridges are not part of the collision backend yet. Bike/rider contacts crash the drone; they do not force another player's bike to fall. Aircraft presets are approximations. Private game hooks are tied to the supported executable, so a game update may require a new mod build.
+
+If something goes wrong, [open an issue](https://github.com/mooniethegreat/mxb-fpv-releases/issues) with what happened, your mod/game version and `plugins/mxb_fpv.log`. Please leave passwords and server access details out of reports.
+
+## Source and credits
+
+Source is in [mod](mod). Build with Visual Studio 2022 C++ Build Tools and a Windows 10/11 SDK: `./mod/build.ps1 -SkipTests`. [Release packaging](RELEASING.md) describes how the updater gets its information. The bike-switch mod is a separate project.
+
+Thanks to [Kino / trbflxr](https://github.com/trbflxr/kino) for the original drone sound samples, [MinHook](https://github.com/TsudaKageyu/minhook), [Dear ImGui](https://github.com/ocornut/imgui) and [FrostMod](https://github.com/Frostn1/frostmod). See [third-party notices](mod/THIRD-PARTY-NOTICES.txt) and [audio provenance](mod/assets/audio/PROVENANCE.txt). Original assets remain credited to their creators; this repository does not claim ownership of them.
+
+Unofficial community mod. Not affiliated with PiBoSo, DJI, BETAFPV or Betaflight. The cover is illustrated artwork, not a gameplay screenshot; [artwork details](assets/COVER.md).

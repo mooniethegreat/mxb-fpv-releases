@@ -1,0 +1,13 @@
+/mod/build/
+/mod/dist/
+/out/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.log
+*.part
+*.user
+Thumbs.db
+.DS_Store
