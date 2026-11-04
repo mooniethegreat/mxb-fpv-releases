@@ -1,25 +1,25 @@
 {
   "schema": 1,
   "stable": {
+    "installer": {
+      "sha256": "45afab852f404cd01dbc6bb621011d5650ec30983dc3e764a1458b1a555e6355",
+      "bytes": 4665344
+    },
+    "notes": "MXB FPV v1.1. Drone-centered rider update priority, sparse-rider visibility protection, shared drone reconnect recovery, remote drone/rider smoothing, drone icons on the existing MaxHUD map, and clearer running/latest/downloaded update states. Install on each pilot's PC after closing MX Bikes; saved controls are kept.",
     "game_sha256": [
       "9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291"
     ],
-    "notes": "MXB FPV v1.0 stable release. Multiplayer is tested on public servers. Includes pit-screen drone spectator flight, rider/drone maps, centered controls, spatial sound, in-game tuning and verified updates. Reviewed flight behavior is unchanged.",
-    "version": "1.0",
-    "installer": {
-      "bytes": 4641280,
-      "sha256": "e3c287a778c84735a04763af3063cac7d7c27470822a5d4416b97cb04c87cf8d"
-    }
+    "version": "1.1"
   },
   "preview": {
+    "installer": {
+      "sha256": "45afab852f404cd01dbc6bb621011d5650ec30983dc3e764a1458b1a555e6355",
+      "bytes": 4665344
+    },
+    "notes": "MXB FPV v1.1. Drone-centered rider update priority, sparse-rider visibility protection, shared drone reconnect recovery, remote drone/rider smoothing, drone icons on the existing MaxHUD map, and clearer running/latest/downloaded update states. Install on each pilot's PC after closing MX Bikes; saved controls are kept.",
     "game_sha256": [
       "9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291"
     ],
-    "notes": "MXB FPV v1.0 stable release. Multiplayer is tested on public servers. Includes pit-screen drone spectator flight, rider/drone maps, centered controls, spatial sound, in-game tuning and verified updates. Reviewed flight behavior is unchanged.",
-    "version": "1.0",
-    "installer": {
-      "bytes": 4641280,
-      "sha256": "e3c287a778c84735a04763af3063cac7d7c27470822a5d4416b97cb04c87cf8d"
-    }
+    "version": "1.1"
   }
 }
