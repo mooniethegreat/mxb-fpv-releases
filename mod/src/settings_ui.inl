@@ -29,7 +29,7 @@ void RatePlot() {
 void Overlay() {
     if(!menuOpen){if(settingsScreen){auto screen=ImGui::GetIO().DisplaySize;ImGui::SetNextWindowPos({screen.x-28,screen.y-60},ImGuiCond_Always,{1,1});
         ImGui::SetNextWindowBgAlpha(0);ImGui::Begin("FPV entry",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoSavedSettings);
-        if(updater.Status().available)ImGui::TextColored({0.1f,0.45f,0.15f,1},"FPV update available");
+        auto update=updater.Status();if(update.available&&update.compatible&&!update.busy)ImGui::TextColored({0.1f,0.45f,0.15f,1},update.downloaded.empty()?"FPV v%s available (running v%s)":"FPV v%s downloaded - install after closing",update.version.c_str(),Version);
         if(ImGui::Button("FPV Drone   [F9]",{220,31}))menuOpen=true;ImGui::End();}return;}
     std::lock_guard<std::mutex> settingsLock(flightMutex);const auto display=ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos({display.x*0.5f,display.y*0.5f},ImGuiCond_Appearing,{0.5f,0.5f});
@@ -39,7 +39,7 @@ void Overlay() {
     static int page{};bool changed=false;static int binding=-1;static ULONGLONG bindTime{};static std::array<float,8> baseline{};
     ImGui::BeginChild("Navigation",{155,-51},ImGuiChildFlags_Borders);
     const char* pages[]={"Receiver","Rates & throttle","Aircraft","Audio & display","Multiplayer","Rider","Updates"};
-    for(int i=0;i<7;i++){if(ImGui::Selectable(pages[i],page==i,0,{0,35})){page=i;binding=-1;}}
+    for(int i=0;i<7;i++){auto u=updater.Status();const char* label=i==6&&u.available&&u.compatible?"Updates  *":pages[i];if(ImGui::Selectable(label,page==i,0,{0,35})){page=i;binding=-1;}}
     ImGui::Spacing();ImGui::Separator();ImGui::TextWrapped("F8: fly / return\nR: reset drone\nF9: settings");ImGui::EndChild();ImGui::SameLine();
     ImGui::BeginChild("Settings page",{0,-51},ImGuiChildFlags_Borders);
     ImGui::SeparatorText(pages[page]);ImGui::PushItemWidth(280);
@@ -104,12 +104,16 @@ void Overlay() {
             ImGui::Checkbox("Use existing MaxHUD map when available",&mapSettings.external);
             ImGui::SliderFloat("Fallback map size",&mapSettings.size,180,460,"%.0f px");
             ImGui::SetNextItemWidth(120);if(ImGui::InputInt("Map key (M = 77)",&mapSettings.key))mapSettings.key=std::clamp(mapSettings.key,1,254);
-            ImGui::TextWrapped("The map is available while riding and flying. Your drone is green; other pilots are orange. MaxHUD's map and standings remain available. The FPV map uses the current track centerline if no usable HUD map is found.");
+            ImGui::TextWrapped("Your drone is green; other pilots are orange. With MaxHUD enabled, FPV adds drone icons to its existing track map. It never draws a second track over it. Without a HUD map, FPV uses the current track centerline.");
         }
     }else if(page==4){
         ImGui::TextWrapped("Multiplayer is tested and working on public servers. Install FPV on each viewer's PC. Drones, sound, goggles and controller poses are shared automatically through the game server.");
         bool reconnect=ImGui::Checkbox("Enable drone sharing",&syncSettings.enabled);
         reconnect=ImGui::Combo("Connection",&syncSettings.transport,"Automatic / current game server\0Manual UDP relay (fallback)\0")||reconnect;
+        if(ImGui::SliderInt("Remote drone smoothing",&syncSettings.smoothingMs,0,250,"%d ms"))reconnect=true;
+        ImGui::SliderInt("Rider position smoothing in FPV",&riderSmoothingMs,0,120,"%d ms");
+        ImGui::Checkbox("Keep sparse rider updates visible in FPV",&keepDistantRiders);
+        ImGui::TextWrapped("Drone bodies, sound and map markers share the same interpolated state. Rider smoothing affects the view only. 0 ms disables smoothing. Nearby rider updates follow the drone while flying.");
         if(syncSettings.transport==0){
             ImGui::TextWrapped("No IP address, extra port or host setup is needed. The game server can remain unmodified. Each viewer needs the FPV mod to render and hear the drones.");
             if(ImGui::Button("Reconnect discovery"))reconnect=true;
@@ -134,13 +138,15 @@ void Overlay() {
         ImGui::EndDisabled();
         ImGui::TextDisabled("Click Save to keep these preferences.");
         ImGui::Spacing();
-        if(update.available)ImGui::TextColored({0.1f,0.45f,0.15f,1},"Version %s is available",update.version.c_str());
-        else if(!update.version.empty())ImGui::Text("Latest published version: %s",update.version.c_str());
+        ImGui::Text("Running plugin: v%s",Version);
+        if(!update.version.empty())ImGui::Text("Latest in selected channel: v%s",update.version.c_str());
+        if(update.available&&update.compatible&&!update.busy)ImGui::TextColored({0.1f,0.45f,0.15f,1},update.downloaded.empty()?"UPDATE AVAILABLE: v%s":"READY TO INSTALL: v%s",update.version.c_str());
+        else if(update.checked&&!update.busy&&!update.available)ImGui::TextColored({0.1f,0.45f,0.15f,1},"UP TO DATE - no installation needed");
         ImGui::TextWrapped("%s",update.message.c_str());
         ImGui::BeginDisabled(update.busy);
         if(ImGui::Button("Check for updates",{170,30}))updater.Check(previewUpdates);
         ImGui::SameLine();if(ImGui::Button("View GitHub releases",{185,30}))ShellExecuteW(gameWindow,L"open",ReleasesUrl,nullptr,nullptr,SW_SHOWNORMAL);
-        if(!update.version.empty()&&update.compatible){
+        if(update.available&&update.compatible&&update.downloaded.empty()){
             if(ImGui::Button("Download verified installer",{260,30}))updater.Download();
             ImGui::SameLine();ImGui::Text("%.1f MB",update.bytes/(1024.0*1024.0));
         }

@@ -5,6 +5,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include "peer_sync.h"
+#include "motion.h"
 #include <array>
 #include <mutex>
 #include <unordered_map>
@@ -39,29 +40,30 @@ bool ReadNativeRoster(std::uintptr_t base,NativeRoster* out){
     __try {
         // Server-authenticated logical connection IDs; not the transport handshake ID.
         if(!base||*reinterpret_cast<const int*>(base+0x598904)!=7)return false;
-        out->own=*reinterpret_cast<const int*>(base+0x598908);if(out->own<1||out->own>127)return false;
+        out->own=*reinterpret_cast<const int*>(base+0x598908);if(out->own<0||out->own>255)return false;
         for(int i=0;i<50;i++){
             auto row=base+0x599044+i*0x2e0;int state=*reinterpret_cast<const int*>(row),id=*reinterpret_cast<const int*>(row+4);
-            if(state>1&&id>0&&id<=127&&id!=out->own)out->peers[out->count++]=id;
+            if(state>1&&id>0&&id<=255&&id!=out->own)out->peers[out->count++]=id;
         }return true;
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 }
 struct PeerSync::Impl {
     SOCKET socket{INVALID_SOCKET};bool winsock{},host{};sockaddr_in relay{};std::uint64_t room{},id{},sequence{},lastSend{};
-    struct Entry {Packet packet;sockaddr_in address;std::uint64_t seen;};
+    struct Entry {Packet packet;sockaddr_in address;std::uint64_t seen;MotionHistory motion;};
     std::unordered_map<std::uint64_t,Entry> entries;std::string status{"Cosmetic sync off"};mutable std::mutex mutex;
-    struct NativePeer {std::uint64_t token{},sequence{},seen{},dataTime{},sent{},probeAt{};unsigned probes{};bool confirmed{},ackPending{},haveData{},lastFlying{};Packet packet;};
+    struct NativePeer {std::uint64_t token{},sequence{},seen{},dataTime{},sent{},probeAt{};unsigned probes{};bool confirmed{},ackPending{},haveData{},lastFlying{};Packet packet;MotionHistory motion;};
     std::unordered_map<int,NativePeer> nativePeers;
-    std::uintptr_t base{};bool nativeAvailable{},enabled{},nativeOnline{};int transport{};
+    std::uintptr_t base{};bool nativeAvailable{},enabled{},nativeOnline{};int transport{},nativeOwn{},smoothingMs{100};
+    std::uint64_t received{},sent{},recovered{};
     PeerState own;std::uint64_t submitted{};
-    void ResetNative(){nativePeers.clear();nativeOnline=false;id=NewSender(this);sequence=0;}
+    void ResetNative(){nativePeers.clear();nativeOnline=false;nativeOwn=0;id=NewSender(this);sequence=0;received=sent=recovered=0;}
 };
 PeerSync::PeerSync():impl_(new Impl){}
 PeerSync::~PeerSync(){Close();delete impl_;}
 void PeerSync::Close(){std::lock_guard<std::mutex> lock(impl_->mutex);impl_->enabled=false;if(impl_->socket!=INVALID_SOCKET)closesocket(impl_->socket);impl_->socket=INVALID_SOCKET;if(impl_->winsock)WSACleanup();impl_->winsock=false;impl_->entries.clear();impl_->ResetNative();impl_->status="Drone sharing off";}
 bool PeerSync::Configure(const SyncSettings& s) {
-    Close();std::lock_guard<std::mutex> lock(impl_->mutex);impl_->transport=std::clamp(s.transport,0,1);impl_->enabled=s.enabled;if(!s.enabled)return true;
+    Close();std::lock_guard<std::mutex> lock(impl_->mutex);impl_->transport=std::clamp(s.transport,0,1);impl_->smoothingMs=std::clamp(s.smoothingMs,0,250);impl_->enabled=s.enabled;if(!s.enabled)return true;
     if(impl_->transport==0){impl_->room=Hash("MXB-FPV-native-v1");impl_->status="Automatic game-server sync";return true;}
     WSADATA data{};if(WSAStartup(MAKEWORD(2,2),&data)){impl_->status="Windows UDP initialization failed";return false;}impl_->winsock=true;
     impl_->host=s.host;impl_->room=Hash(s.room);impl_->id=NewSender(this);
@@ -84,7 +86,8 @@ void PeerSync::Tick(const PeerState& own) {
         if(!impl_->host&&(source.sin_addr.s_addr!=impl_->relay.sin_addr.s_addr||source.sin_port!=impl_->relay.sin_port))continue;
         auto found=impl_->entries.find(p.sender);if(found!=impl_->entries.end()&&p.sequence<=found->second.packet.sequence)continue;
         if(found==impl_->entries.end()&&impl_->entries.size()>=64)continue;
-        impl_->entries[p.sender]={p,source,now};
+        auto& entry=impl_->entries[p.sender];if(entry.packet.flying!=p.flying)entry.motion.samples.clear();entry.packet=p;entry.address=source;entry.seen=now;
+        entry.motion.Push({now,{p.position[0],p.position[1],p.position[2]},{p.velocity[0],p.velocity[1],p.velocity[2]},{p.rotation[0],p.rotation[1],p.rotation[2],p.rotation[3]}});
         if(impl_->host)for(const auto& pair:impl_->entries)if(pair.first!=p.sender)sendto(impl_->socket,reinterpret_cast<const char*>(&p),sizeof(p),0,reinterpret_cast<const sockaddr*>(&pair.second.address),sizeof(source));
     }
     for(auto i=impl_->entries.begin();i!=impl_->entries.end();)if(now-i->second.seen>4000)i=impl_->entries.erase(i);else++i;
@@ -102,19 +105,23 @@ void PeerSync::BindNative(std::uintptr_t base,bool available){std::lock_guard<st
 void PeerSync::ResetNative(){std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->transport==0)impl_->ResetNative();}
 void PeerSync::PumpNative(){
     std::lock_guard<std::mutex> lock(impl_->mutex);auto& a=*impl_;if(!a.enabled||a.transport!=0||!a.nativeAvailable)return;
-    NativeRoster roster;if(!ReadNativeRoster(a.base,&roster)){if(a.nativeOnline)a.ResetNative();return;}a.nativeOnline=true;
+    NativeRoster roster;if(!ReadNativeRoster(a.base,&roster)){if(a.nativeOnline)a.ResetNative();return;}
+    if(a.nativeOwn&&a.nativeOwn!=roster.own)a.ResetNative();a.nativeOnline=true;a.nativeOwn=roster.own;
     auto present=[&](int id){return std::find(roster.peers.begin(),roster.peers.begin()+roster.count,id)!=roster.peers.begin()+roster.count;};
     for(auto i=a.nativePeers.begin();i!=a.nativePeers.end();)if(!present(i->first))i=a.nativePeers.erase(i);else++i;
     for(int i=0;i<roster.count;i++)a.nativePeers.try_emplace(roster.peers[i]);
     auto now=GetTickCount64();auto own=a.own;if(now-a.submitted>1000)own.flying=false;
     using Send=std::int64_t(*)(int,const void*,int,int);auto send=reinterpret_cast<Send>(a.base+0x2a3920);
-    auto sendFrame=[&](int destination,unsigned kind){NativeFrame frame;frame.kind=kind;frame.packet=MakePacket(own,a.room,a.id,++a.sequence);send(NativeMessageType,&frame,sizeof(frame),destination);};
+    auto sendFrame=[&](int destination,unsigned kind){NativeFrame frame;frame.kind=kind;frame.packet=MakePacket(own,a.room,a.id,++a.sequence);if(send(NativeMessageType,&frame,sizeof(frame),destination)==0)++a.sent;};
     for(auto& entry:a.nativePeers){auto& p=entry.second;
         if(p.confirmed&&now-p.seen>10000){p.confirmed=false;p.haveData=false;p.probeAt=0;p.probes=0;}
         if(p.ackPending){sendFrame(entry.first,2);p.ackPending=false;}
-        if(!p.confirmed&&now>=p.probeAt){sendFrame(entry.first,1);unsigned wait=p.probes==0?2000:p.probes==1?8000:p.probes==2?30000:60000;p.probeAt=now+wait;p.probes=std::min(p.probes+1,4u);}
-        // Unknown/vanilla clients receive only bounded discovery, never flight streams.
-        if(p.confirmed&&(!p.sent||p.lastFlying!=own.flying||now-p.sent>=(own.flying?50u:500u))){sendFrame(entry.first,3);p.sent=now;p.lastFlying=own.flying;}
+        if(!p.confirmed&&now>=p.probeAt){sendFrame(entry.first,1);unsigned wait=p.probes==0?1000:p.probes==1?2000:5000;p.probeAt=now+wait;p.probes=std::min(p.probes+1,4u);}
+        // While discovering, a low-rate valid state also repairs clients whose
+        // handshake was reset by a view/session transition. Confirmed peers get
+        // the full 20 Hz stream. Stock clients ignore the reserved type.
+        bool bootstrap=!p.confirmed&&own.flying;
+        if((p.confirmed||bootstrap)&&(!p.sent||p.lastFlying!=own.flying||now-p.sent>=(p.confirmed&&own.flying?50u:500u))){sendFrame(entry.first,3);p.sent=now;p.lastFlying=own.flying;}
     }
 }
 void PeerSync::ReceiveNative(int connection,const void* data,int bytes){
@@ -124,21 +131,28 @@ void PeerSync::ReceiveNative(int connection,const void* data,int bytes){
     NativeRoster roster;if(!ReadNativeRoster(a.base,&roster)||std::find(roster.peers.begin(),roster.peers.begin()+roster.count,connection)==roster.peers.begin()+roster.count)return;
     const auto& packet=frame.packet;if(!Valid(packet,a.room)||packet.sender==a.id)return;
     auto& peer=a.nativePeers[connection];auto now=GetTickCount64();
-    if(frame.kind==3){if(!peer.confirmed||packet.sender!=peer.token||packet.sequence<=peer.sequence)return;peer.packet=packet;peer.haveData=true;peer.dataTime=now;}
-    else {
-        if(peer.token!=packet.sender){peer=Impl::NativePeer{};peer.token=packet.sender;}
-        if(packet.sequence<=peer.sequence)return;peer.confirmed=true;if(frame.kind==1)peer.ackPending=true;
-    }
+    // A reserved, fully validated state is also proof of capability. A pilot
+    // entering live spectator view must not vanish behind an expired handshake.
+    if(peer.token!=packet.sender){peer=Impl::NativePeer{};peer.token=packet.sender;}
+    if(packet.sequence<=peer.sequence)return;
+    if(frame.kind==3&&!peer.confirmed){++a.recovered;peer.ackPending=true;}
+    peer.confirmed=true;if(frame.kind==1)peer.ackPending=true;
+    if(!peer.haveData||peer.packet.flying!=packet.flying)peer.motion.samples.clear();
+    peer.packet=packet;peer.haveData=true;peer.dataTime=now;
+    peer.motion.Push({now,{packet.position[0],packet.position[1],packet.position[2]},{packet.velocity[0],packet.velocity[1],packet.velocity[2]},{packet.rotation[0],packet.rotation[1],packet.rotation[2],packet.rotation[3]}});
+    ++a.received;
     peer.sequence=packet.sequence;peer.seen=now;
 }
 std::vector<PeerState> PeerSync::Peers() const {
     std::lock_guard<std::mutex> lock(impl_->mutex);std::vector<PeerState> result;
-    auto now=GetTickCount64();if(impl_->transport==0){for(const auto& entry:impl_->nativePeers)if(entry.second.haveData&&now-entry.second.dataTime<4000)result.push_back(State(entry.second.packet,entry.second.dataTime));}
-    else for(const auto& entry:impl_->entries)result.push_back(State(entry.second.packet,entry.second.seen));return result;
+    auto now=GetTickCount64();auto append=[&](const Packet& packet,std::uint64_t seen,const MotionHistory& motion){auto state=State(packet,seen);if(state.flying&&impl_->smoothingMs&&!motion.samples.empty()){auto pose=motion.At(now,impl_->smoothingMs);state.position=pose.position;state.rotation=pose.rotation;state.velocity=pose.velocity;}result.push_back(state);};
+    if(impl_->transport==0){for(const auto& entry:impl_->nativePeers)if(entry.second.haveData&&now-entry.second.dataTime<4000)append(entry.second.packet,entry.second.dataTime,entry.second.motion);}
+    else for(const auto& entry:impl_->entries)append(entry.second.packet,entry.second.seen,entry.second.motion);return result;
 }
 std::string PeerSync::Status() const {std::lock_guard<std::mutex> lock(impl_->mutex);const auto& a=*impl_;
     if(!a.enabled)return "Drone sharing off";
     if(a.transport==0){if(!a.nativeAvailable)return "Native sync unavailable on this build; manual UDP is available";if(!a.nativeOnline)return "Automatic sync ready - join a multiplayer session";
-        size_t count=0;for(const auto& p:a.nativePeers)if(p.second.confirmed)count++;return "Game-server sync: "+std::to_string(count)+" FPV peer(s) / "+std::to_string(a.nativePeers.size())+" rider(s)";}
+        size_t count=0,flying=0;auto now=GetTickCount64();for(const auto& p:a.nativePeers)if(p.second.confirmed){count++;if(p.second.haveData&&p.second.packet.flying&&now-p.second.dataTime<4000)flying++;}
+        return "Game-server sync: "+std::to_string(count)+" FPV peer(s), "+std::to_string(flying)+" flying / "+std::to_string(a.nativePeers.size())+" connection(s). TX "+std::to_string(a.sent)+" / RX "+std::to_string(a.received)+" / recovered "+std::to_string(a.recovered);}
     return a.status+" | "+std::to_string(a.entries.size())+" peer(s)";}
 }

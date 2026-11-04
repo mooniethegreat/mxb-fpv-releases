@@ -66,13 +66,20 @@ getter exposed as command `34F`. The native roster at `599044` has 50 records,
 stride `2E0`; state and logical ID are at +0/+4. This is distinct from the
 transport handshake identifier at `5986CC`.
 
-Ready peers receive a capability hello. Full drone streams begin only after a
-matching FPV handshake. A stock client therefore receives occasional bounded
-discovery, never the continuous flight stream. Unknown-client probing backs off
-to one message per minute. State is 20 Hz while flying and 2 Hz while idle.
+Ready peers receive a capability hello. Confirmed FPV peers receive flight state
+at 20 Hz; idle state is 2 Hz. In v1.1, discovery retries within five seconds and
+includes bounded 2 Hz state bootstrap while flying. Stock clients ignore this
+reserved message type. Earlier versions backed discovery off to a full minute.
 Nonce, sequence, room-independent native protocol tag, sender roster membership,
 finite payload values, byte limits and expiry are checked. Native session/world
 reset events clear state. Stale sound and visuals are removed.
+
+v1.1 keeps the wire format and adds recovery after spectator/view transitions:
+valid state also confirms capability, hello/ack carry usable state, and discovery
+backs off to five seconds. While discovering during flight, a bounded 2 Hz state
+bootstrap repairs a missing handshake; confirmed peers retain the 20 Hz stream.
+State validation, roster authentication, monotonic sequence checks and expiry
+remain active. See [v1.1 implementation](V1.1-NETWORK-VIEW.md) for evidence and limits.
 
 Automatic mode is enabled by default on upgrades and needs no port, IP or room.
 Manual UDP is retained for a custom server that filters the native channel.

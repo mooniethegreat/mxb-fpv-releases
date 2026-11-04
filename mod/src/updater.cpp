@@ -92,11 +92,11 @@ void AtomicWrite(const std::filesystem::path& path,const std::vector<unsigned ch
 UpdateStatus Parse(const std::string& text,bool preview) {
     auto root=JsonObject::Parse(winrt::to_hstring(text));
     if(root.GetNamedNumber(L"schema")!=1)throw std::runtime_error("This update manifest needs a newer checker.");
-    UpdateStatus best;bool found=false;
+    UpdateStatus best;best.checked=true;bool found=false;
     for(auto channel:{L"stable",L"preview"}){
         if(!preview&&std::wstring(channel)==L"preview")continue;
         if(!root.HasKey(channel)||root.GetNamedValue(channel).ValueType()==JsonValueType::Null)continue;
-        auto release=root.GetNamedObject(channel);UpdateStatus candidate;
+        auto release=root.GetNamedObject(channel);UpdateStatus candidate;candidate.checked=true;
         candidate.version=winrt::to_string(release.GetNamedString(L"version"));auto parts=VersionParts(candidate.version);
         if(found&&parts<=VersionParts(best.version))continue;
         candidate.notes=winrt::to_string(release.GetNamedString(L"notes",L""));if(candidate.notes.size()>8192)throw std::runtime_error("Release notes are too long.");
@@ -108,11 +108,12 @@ UpdateStatus Parse(const std::string& text,bool preview) {
         for(auto hash:release.GetNamedArray(L"game_sha256"))if(winrt::to_string(hash.GetString())==SupportedGameHash)candidate.compatible=true;
         candidate.available=parts>VersionParts(Version);
         candidate.releaseUrl=Repo+L"/releases/tag/v"+winrt::to_hstring(candidate.version).c_str();
-        candidate.message=candidate.available?"A newer FPV version is available.":"You have the latest version in this channel.";
+        candidate.message=candidate.available?"Running v"+std::string(Version)+". Update to v"+candidate.version+" is available.":
+            (parts==VersionParts(Version)?"Up to date. You are running v"+std::string(Version)+".":"Running v"+std::string(Version)+", newer than the selected channel. No update needed.");
         if(!candidate.compatible)candidate.message="This release supports a different MX Bikes build. Download is disabled.";
         best=candidate;found=true;
     }
-    if(!found)best.message="No release is published in the selected update channel yet.";
+    if(!found){best.checked=false;best.message="No release is published in the selected update channel yet.";}
     return best;
 }
 }
@@ -124,7 +125,7 @@ void Updater::Close() { stopping_=true;if(worker_.joinable())worker_.join(); }
 void Updater::Launch(bool download,bool preview,bool automatic) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if(stopping_||state_.busy||(download&&(state_.version.empty()||!state_.compatible)))return;
+        if(stopping_||state_.busy||(download&&(!state_.available||!state_.compatible||!state_.downloaded.empty())))return;
         state_.busy=true;state_.message=download?"Downloading and verifying installer...":"Checking GitHub for updates...";
     }
     if(worker_.joinable())worker_.join();
@@ -140,20 +141,22 @@ void Updater::Work(bool download,bool preview,bool automatic) {
             if(bytes.size()!=state.bytes||Hash(bytes)!=state.sha256)throw std::runtime_error("Installer verification failed. Nothing was installed; check again before retrying.");
             if(stopping_)throw std::runtime_error("Update cancelled.");
             std::filesystem::create_directories(folder/L"Downloads");state.downloaded=folder/L"Downloads"/filename;AtomicWrite(state.downloaded,bytes);
-            state.message="Installer verified and saved. Close MX Bikes, then run it from the download folder.";
+            state.message="v"+state.version+" is downloaded, not installed. Still running v"+Version+". Close MX Bikes, run the saved installer, then restart.";
         }else{
             auto cache=folder/L"update.json",checkState=folder/L"updates.ini";bool fresh=false;std::string text;
-            wchar_t previous[32]{};GetPrivateProfileStringW(L"Updates",L"LastCheck",L"0",previous,32,checkState.c_str());
+            wchar_t previous[32]{},checkedVersion[32]{};GetPrivateProfileStringW(L"Updates",L"LastCheck",L"0",previous,32,checkState.c_str());
+            GetPrivateProfileStringW(L"Updates",L"RunningVersion",L"",checkedVersion,32,checkState.c_str());
             unsigned long long last=_wcstoui64(previous,nullptr,10),now=Now();
-            if(automatic&&now>=last&&now-last<6*60*60){text=ReadCache(cache);if(!text.empty())try{state=Parse(text,preview);fresh=true;}catch(...){}}
+            if(automatic&&winrt::to_string(checkedVersion)==Version&&now>=last&&now-last<6*60*60){text=ReadCache(cache);if(!text.empty())try{state=Parse(text,preview);fresh=true;}catch(...){}}
             if(!fresh){
                 auto bytes=Fetch(L"raw.githubusercontent.com",L"/mooniethegreat/mxb-fpv-releases/main/update.json",65536,stopping_);
                 text.assign(bytes.begin(),bytes.end());state=Parse(text,preview);
                 AtomicWrite(cache,bytes);WritePrivateProfileStringW(L"Updates",L"LastCheck",std::to_wstring(now).c_str(),checkState.c_str());
+                WritePrivateProfileStringW(L"Updates",L"RunningVersion",winrt::to_hstring(Version).c_str(),checkState.c_str());
             }
         }
         std::lock_guard<std::mutex> lock(mutex_);state.busy=false;state_=state;
-    }catch(const std::exception& e){std::lock_guard<std::mutex> lock(mutex_);state_.busy=false;state_.message=e.what();}
-    catch(...){std::lock_guard<std::mutex> lock(mutex_);state_.busy=false;state_.message="Cannot read the GitHub update information. Try again later.";}
+    }catch(const std::exception& e){std::lock_guard<std::mutex> lock(mutex_);state_.busy=false;if(!download){state_.available=false;state_.checked=false;}state_.message=e.what();}
+    catch(...){std::lock_guard<std::mutex> lock(mutex_);state_.busy=false;if(!download){state_.available=false;state_.checked=false;}state_.message="Cannot read the GitHub update information. Try again later.";}
 }
 }

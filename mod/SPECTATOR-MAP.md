@@ -1,5 +1,9 @@
 # 0.7 spectator flight and map
 
+This is the original 0.7 implementation record. v1.1 replaces the map's label-fit
+requirement with a hash-verified MaxHUD projection adapter and adds observer/view
+recovery; see [current evidence and limits](V1.1-NETWORK-VIEW.md).
+
 Status: reviewed by the user and approved for release. The user confirmed
 multiplayer works on public servers. The coding agent traced the new spectator
 and map interfaces statically and compiled the implementation without launching

@@ -20,12 +20,13 @@ public:
     void Remove(int race);
     bool SpawnPoint(Vec3& position) const;
     void Configure(std::filesystem::path maxHudIni);
+    void BindExternal(std::uintptr_t verifiedBase);
     void External(int state,int* quads,void** quadData,int* strings,void** stringData,bool hideBike);
     void Draw(const MapSettings&,bool visible,const PeerState& own,const std::vector<PeerState>& peers);
 private:
     struct Rider {RacePoint point;std::uint64_t seen{};};
     struct Rect {float x{},y{},right{},bottom{};bool valid{};};
-    struct Projection {float a{},b{},tx{},ty{};std::uint64_t seen{};bool valid{};};
+    struct Projection {float xx{},xz{},yx{},yz{},tx{},ty{};std::uint64_t seen{};bool valid{};};
     void ReadLayout(int state);
     mutable std::mutex mutex_;
     std::vector<Vec3> line_;
@@ -33,6 +34,7 @@ private:
     std::array<Rect,5> layout_{};
     std::filesystem::path maxHudIni_;
     std::uint64_t layoutTick_{},externalTick_{};
+    std::uintptr_t externalBase_{};
     int layoutState_{-1};
     Rect externalRect_;
     Projection projection_;

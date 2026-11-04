@@ -8,6 +8,7 @@
 #include "version.h"
 #include "native_view.h"
 #include "map_hud.h"
+#include "rider_view.h"
 #include "../vendor/minhook/include/MinHook.h"
 #include <bcrypt.h>
 #include <filesystem>
@@ -47,6 +48,9 @@ Updater updater;
 bool automaticUpdates{true},previewUpdates{false};
 NativeView nativeView;
 MapHud mapHud;
+RiderView riderView;
+int riderSmoothingMs{65};
+bool keepDistantRiders{true};
 MapSettings mapSettings;
 bool mapVisible{true},pitScreen{};
 std::atomic<bool> spectatorMode{},spectatorRequested{},exitRequested{};
@@ -91,6 +95,8 @@ using BikeStep=std::int64_t(*)(void*,float);
 using NativeDash=std::int64_t(*)(const void*);
 using NativeText=void(*)(int,float,float,float,std::uint32_t,const char*);
 using NativeNetEvent=std::int64_t(*)(int,std::uintptr_t,std::uintptr_t);
+using NativeSnapshot=std::int64_t(*)();
+NativeSnapshot originalSnapshot{};
 NativeNetEvent originalNetEvent{};
 NativeMixer originalMixer{};BikeStep originalBikeStep{};NativeDash originalDash{};NativeText originalText{};
 thread_local bool droneDashboard{};
@@ -184,6 +190,15 @@ std::int64_t NetworkEvent(int kind,std::uintptr_t argument,std::uintptr_t extra)
     // This callback runs inside MX Bikes' own serialized client network update.
     if(kind==0x13)peerSync.PumpNative();return result;
 }
+std::int64_t SendSnapshot(){
+    if(!active||*reinterpret_cast<const int*>(gameBase+0x598904)!=7)return originalSnapshot();
+    // Opcode 28 has a separate observer anchor before the authoritative vehicle
+    // states. Entity ID zero asks the stock server to prioritize these coordinates.
+    // Only serialization sees this override. The parked bike never moves.
+    auto observer=reinterpret_cast<unsigned char*>(gameBase+0x5a2004);std::array<unsigned char,28> saved;std::memcpy(saved.data(),observer,saved.size());
+    {std::lock_guard<std::mutex> lock(flightMutex);*reinterpret_cast<int*>(observer)=0;float values[]={flight.position.x,flight.position.y,flight.position.z,flight.velocity.x,flight.velocity.y,flight.velocity.z};std::memcpy(observer+4,values,sizeof(values));}
+    auto result=originalSnapshot();std::memcpy(observer,saved.data(),saved.size());return result;
+}
 std::int64_t MixAudio(int milliseconds) {
     float saved[12]{};bool overrideListener=active&&(onTrack||spectatorMode);
     auto listener=reinterpret_cast<float*>(gameBase+0x399608);
@@ -234,7 +249,9 @@ void DashboardText(int font,float x,float y,float size,std::uint32_t color,const
     }originalText(font,x,y,size,color,text);
 }
 std::int64_t RenderRider(void* graphics,int* instance,void* physics,int flags) {
-    auto result=originalRider(graphics,instance,physics,flags);riderVisuals.Rider(graphics,instance,physics);return result;
+    alignas(16) std::array<unsigned char,0x760> copy;
+    const bool smooth=active&&riderView.Smooth(gameBase,graphics,instance,physics,riderSmoothingMs,copy.data());void* view=smooth?copy.data():physics;
+    auto result=originalRider(graphics,instance,view,flags);riderVisuals.Rider(graphics,instance,view);return result;
 }
 std::int64_t BuildCamera(void* vehicle,void* look,int flags,float lookAxis,void* output) {
     if(!active||spectatorMode)return originalBuilder(vehicle,look,flags,lookAxis,output);
@@ -281,6 +298,7 @@ bool Hook(void* target,void* replacement,void** original) {
     return MH_CreateHook(target,replacement,original)==MH_OK;
 }
 BOOL WINAPI RenderFrame(HDC dc);
+bool VerifyModule(HMODULE target,const char* expectedHash);
 BOOL WINAPI SetGameCursor(int x,int y) {return menuOpen?TRUE:originalCursor(x,y);}
 bool InstallHooks() {
     if(MH_Initialize()!=MH_OK) return false;
@@ -313,11 +331,17 @@ bool InstallHooks() {
         std::memcmp(reinterpret_cast<void*>(gameBase+0x2a3920),nativeSendBytes,sizeof(nativeSendBytes))==0&&
         Hook(eventAddress,reinterpret_cast<void*>(NetworkEvent),reinterpret_cast<void**>(&originalNetEvent));
     peerSync.BindNative(gameBase,nativeSync);Log(nativeSync?"Automatic game-server FPV channel installed.":"Native FPV channel unavailable; manual UDP remains available.");
+    const unsigned char snapshotBytes[]={0xb8,0xd8,0x13,0,0,0xe8,0x06,0xc3,0x07,0,0x48,0x2b,0xe0};
+    auto snapshot=reinterpret_cast<void*>(gameBase+0x2a3350);
+    bool observerReady=!std::memcmp(snapshot,snapshotBytes,sizeof(snapshotBytes))&&Hook(snapshot,reinterpret_cast<void*>(SendSnapshot),reinterpret_cast<void**>(&originalSnapshot));
+    Log(observerReady?"Drone-centered server observer installed.":"Server observer adapter unavailable.");
+    Log(riderView.Initialize(gameBase)?"FPV sparse-rider playback guard installed.":"Sparse-rider guard unavailable or already owned by another mod.");
     // MaxHUD reports its own bike input mapping. Replace it only during FPV;
     // its configuration and normal riding callbacks remain untouched.
     if(auto maxhud=GetModuleHandleW(L"MaxHUD_MXB64.dlo")){
         if(auto draw=GetProcAddress(maxhud,"Draw")){
             if(!Hook(reinterpret_cast<void*>(draw),reinterpret_cast<void*>(MaxHudDraw),reinterpret_cast<void**>(&originalMaxHudDraw)))Log("MaxHUD draw override unavailable.");
+            else if(VerifyModule(maxhud,"d6216e38d3b8100ce34dbf83b18e075d320c7c05c497147dfb8f626da0118295")){mapHud.BindExternal(reinterpret_cast<std::uintptr_t>(maxhud));Log("MaxHUD native map projection verified.");}
         }
     }
     auto swap=GetProcAddress(GetModuleHandleW(L"gdi32.dll"),"SwapBuffers");
@@ -346,9 +370,9 @@ bool InstallHooks() {
     }
     return MH_EnableHook(MH_ALL_HOOKS)==MH_OK;
 }
-bool VerifyBuild() {
+bool VerifyModule(HMODULE target,const char* expectedHash) {
     wchar_t executable[MAX_PATH]{};
-    GetModuleFileNameW(nullptr,executable,MAX_PATH);
+    GetModuleFileNameW(target,executable,MAX_PATH);
     std::ifstream input(executable,std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(input)),{});
     unsigned char digest[32]{};
@@ -359,8 +383,9 @@ bool VerifyBuild() {
     BCryptCloseAlgorithmProvider(algorithm,0);
     if(status<0) return false;
     char hex[65]{};for(int i=0;i<32;i++) sprintf_s(hex+2*i,3,"%02x",digest[i]);
-    return std::strcmp(hex,SupportedGameHash)==0;
+    return std::strcmp(hex,expectedHash)==0;
 }
+bool VerifyBuild(){return VerifyModule(nullptr,SupportedGameHash);}
 HWND FindWindowForGame() {
     HWND result{};
     EnumWindows([](HWND window,LPARAM context)->BOOL {
@@ -498,6 +523,9 @@ void SaveSettings() {
     ok=write(L"Multiplayer",L"Port",std::to_wstring(syncSettings.port))&&ok;
     ok=write(L"Multiplayer",L"Address",std::wstring(syncSettings.address.begin(),syncSettings.address.end()))&&ok;
     ok=write(L"Multiplayer",L"Room",std::wstring(syncSettings.room.begin(),syncSettings.room.end()))&&ok;
+    ok=write(L"Multiplayer",L"DroneSmoothingMs",std::to_wstring(syncSettings.smoothingMs))&&ok;
+    ok=write(L"Multiplayer",L"RiderSmoothingMs",std::to_wstring(riderSmoothingMs))&&ok;
+    ok=write(L"Multiplayer",L"KeepDistantRiders",keepDistantRiders?L"1":L"0")&&ok;
     ok=write(L"Updates",L"Automatic",automaticUpdates?L"1":L"0")&&ok;
     ok=write(L"Updates",L"TesterReleases",previewUpdates?L"1":L"0")&&ok;
     ok=write(L"Map",L"Enabled",mapSettings.enabled?L"1":L"0")&&ok;
@@ -532,7 +560,7 @@ void ChannelBar(const char* id,float value,bool throttle,ImVec2 size) {
 BOOL WINAPI RenderFrame(HDC dc) {
     if(WindowFromDC(dc)!=gameWindow||!wglGetCurrentContext())return originalSwap(dc);
     static bool lateMaxHudAttempted=false;
-    if(!originalMaxHudDraw&&!lateMaxHudAttempted){if(auto library=GetModuleHandleW(L"MaxHUD_MXB64.dlo")){lateMaxHudAttempted=true;if(auto draw=GetProcAddress(library,"Draw")){if(Hook(reinterpret_cast<void*>(draw),reinterpret_cast<void*>(MaxHudDraw),reinterpret_cast<void**>(&originalMaxHudDraw)))MH_EnableHook(reinterpret_cast<void*>(draw));}}}
+    if(!originalMaxHudDraw&&!lateMaxHudAttempted){if(auto library=GetModuleHandleW(L"MaxHUD_MXB64.dlo")){lateMaxHudAttempted=true;if(auto draw=GetProcAddress(library,"Draw")){if(Hook(reinterpret_cast<void*>(draw),reinterpret_cast<void*>(MaxHudDraw),reinterpret_cast<void**>(&originalMaxHudDraw))){MH_EnableHook(reinterpret_cast<void*>(draw));if(VerifyModule(library,"d6216e38d3b8100ce34dbf83b18e075d320c7c05c497147dfb8f626da0118295")){mapHud.BindExternal(reinterpret_cast<std::uintptr_t>(library));Log("MaxHUD native map projection verified (late load).");}}}}}
     auto previous=ImGui::GetCurrentContext();
     if(!overlayReady) {
         IMGUI_CHECKVERSION();overlayContext=ImGui::CreateContext();ImGui::SetCurrentContext(overlayContext);
@@ -553,10 +581,12 @@ BOOL WINAPI RenderFrame(HDC dc) {
     settingsScreen=GameSettingsPage(gameBase);
     pitScreen=nativeView.InPits();
     Update();
+    riderView.Active(active,keepDistantRiders);
     if(active&&spectatorMode){auto now=GetTickCount64();float dt=(now-spectatorTick)*0.001f;spectatorTick=now;std::lock_guard<std::mutex> lock(flightMutex);StepFlight(dt);}
     PeerState own;own.race=spectatorMode?900000+nativeView.Connection():riderVisuals.OwnRace();own.flying=active;own.preset=presetIndex;
     {std::lock_guard<std::mutex> lock(flightMutex);own.position=flight.position;own.rotation=flight.rotation;own.velocity=flight.velocity;own.motor=flight.crashed?0:std::max(0.02f,std::abs(flight.motorOutput));own.activity=std::max({std::abs(flightInput.roll),std::abs(flightInput.pitch),std::abs(flightInput.yaw)});own.propInches=flightSettings.propInches;}
     peerSync.Tick(own);auto peers=peerSync.Peers();riderVisuals.States(own.race,own.flying,peers);droneAudio.Submit(own,peers,audioSettings,onTrack||spectatorMode);
+    static ULONGLONG syncLogAt{};static std::string syncLogStatus;auto syncStatus=peerSync.Status();auto now=GetTickCount64();if(now-syncLogAt>15000&&syncStatus!=syncLogStatus){Log(syncStatus);syncLogStatus=syncStatus;syncLogAt=now;}
     RECT viewport{};GetClientRect(gameWindow,&viewport);riderVisuals.Draw(viewport.right,viewport.bottom);
     ImGui_ImplOpenGL3_NewFrame();ImGui_ImplWin32_NewFrame();
     ImGui::GetIO().MouseDrawCursor=menuOpen||settingsScreen;
@@ -661,16 +691,19 @@ EXPORT int Startup(char*) {
     syncSettings.port=static_cast<int>(Number(L"Multiplayer",L"Port",48127,1024,65535));
     syncSettings.address=Utf8(Setting(L"Multiplayer",L"Address",L"127.0.0.1"));
     syncSettings.room=Utf8(Setting(L"Multiplayer",L"Room",L"mx-fpv"));
+    syncSettings.smoothingMs=static_cast<int>(Number(L"Multiplayer",L"DroneSmoothingMs",100,0,250));
+    riderSmoothingMs=static_cast<int>(Number(L"Multiplayer",L"RiderSmoothingMs",65,0,120));
+    keepDistantRiders=Number(L"Multiplayer",L"KeepDistantRiders",1,0,1)!=0;
     peerSync.Configure(syncSettings);
     hooksReady=InstallHooks();
-    Log(hooksReady?"MXB FPV 1.0 initialized. Multiplayer, pit spectator, map and centered OSD enabled.":"Hook installation failed. FPV unavailable.");
+    Log(hooksReady?"MXB FPV 1.1 initialized. Drone-centered rider updates, shared drone recovery, smoothing and HUD map integration enabled.":"Hook installation failed. FPV unavailable.");
     return 0;
 }
 EXPORT void Shutdown(){
     active=false;spectatorMode=false;nativeView.Forget();menuOpen=false;peerSync.Close();
     updater.Close();
     if(originalWindowProc&&IsWindow(gameWindow)&&reinterpret_cast<WNDPROC>(GetWindowLongPtrW(gameWindow,GWLP_WNDPROC))==WindowProc)SetWindowLongPtrW(gameWindow,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(originalWindowProc));
-    if(supported){MH_DisableHook(MH_ALL_HOOKS);MH_Uninitialize();}
+    if(supported){MH_DisableHook(MH_ALL_HOOKS);riderView.Close();MH_Uninitialize();}
     droneAudio.Close();
     if(overlayReady){ImGui::SetCurrentContext(overlayContext);if(wglGetCurrentContext())ImGui_ImplOpenGL3_Shutdown();ImGui_ImplWin32_Shutdown();ImGui::DestroyContext(overlayContext);overlayContext=nullptr;overlayReady=false;}
     controller.Close();for(auto& hook:xhooks)if(hook.library){FreeLibrary(hook.library);hook.library=nullptr;}

@@ -1,9 +1,10 @@
-# MXB FPV v1.0 implementation
+# MXB FPV v1.1 implementation
 
-Multiplayer is tested and working on public servers. Version 1.0 promotes the
-reviewed 0.7 behavior to a stable release. Changes are version labels, release
-documentation and stable update defaults; flight and networking are unchanged.
-The coding agent did not launch the game.
+Multiplayer was confirmed by the user on public servers. Version 1.1 addresses the
+subsequent rider visibility/drone sharing regression, adds view smoothing, uses
+MaxHUD's current map projection and clarifies update state. See
+[v1.1 technical evidence and limits](V1.1-NETWORK-VIEW.md). No game was launched or
+attached to, and this release has not been gameplay-tested by the coding agent.
 
 SDK: data version 8, interface 9. Pinned executable SHA256:
 `9e792d7aed1dc40df11eea51d1a6d0519daec7be2b65609905df8c9de804a291`.
@@ -23,6 +24,9 @@ are checked before enabling them; unsupported builds leave FPV disabled.
 | Native text renderer | 209E30 | Gear glyph interception in compatibility mode |
 | Profile units | E557D4 | 0 metric; 1 US, 2 UK use mph |
 | Vehicle records | F4EE20 | 50 records, stride 5B24 |
+| Native snapshot sender | 2A3350 | Serialize a drone-centered observer, retain bike state |
+| Native observer | 5A2004 | Entity ID plus six position/velocity floats |
+| Sparse playback comparison | 2AA8CB | Owned limit: 2 s FPV, 0.3 s riding |
 | Own vehicle index | E62710 | Record index + 1 |
 | Render physics | vehicle + 5054 | World matrix at +4; head matrix at +544 |
 | Terrain sampler / slots | 1F1720 / 568488 | Native heightfield, slot stride 6160 |

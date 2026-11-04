@@ -65,6 +65,7 @@ void Install(const fs::path& folder) {
     if(Running(folder))throw std::runtime_error("Close MX Bikes before installing the FPV plugin.");
     auto plugins=folder/L"plugins",tools=plugins/L"mxb_fpv",target=plugins/L"mxb_fpv.dlo";
     if(fs::exists(target)&&!OwnPlugin(target))throw std::runtime_error("An unrecognized mxb_fpv.dlo already exists. Back it up and remove it before installing.");
+    if(fs::exists(target)&&Bytes(target)==Resource(101))return; // Keep the useful previous-version rollback on a repeated install.
     fs::create_directories(tools);
     // Keep configuration in place; stage the binary before replacing a recognized plugin.
     Write(104,tools/L"README.txt");Write(105,tools/L"MinHook-LICENSE.txt");Write(106,tools/L"ImGui-LICENSE.txt");Write(107,tools/L"FrostMod-LICENSE.txt");Write(108,tools/L"THIRD-PARTY-NOTICES.txt");
@@ -137,7 +138,7 @@ HWND Control(HWND window,const wchar_t* type,const wchar_t* text,DWORD style,int
 LRESULT CALLBACK Proc(HWND window,UINT message,WPARAM wParam,LPARAM lParam) {
     if(message==WM_CREATE) {
         font=static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        Control(window,L"STATIC",L"MX Bikes FPV v1.0",0,22,20,620,25);
+        Control(window,L"STATIC",L"MX Bikes FPV v1.1",0,22,20,620,25);
         Control(window,L"STATIC",L"F8 while riding: enter FPV beside your bike / return to the bike.\nIn game: Settings > FPV Drone Settings for live stick mapping and drone presets.",0,22,55,620,48);
         Control(window,L"STATIC",L"MX Bikes installation folder",0,22,120,620,22);
         pathEdit=Control(window,L"EDIT",Detect().c_str(),ES_AUTOHSCROLL|WS_TABSTOP,22,145,485,28);
@@ -153,7 +154,7 @@ LRESULT CALLBACK Proc(HWND window,UINT message,WPARAM wParam,LPARAM lParam) {
         try {
             int id=LOWORD(wParam);
             if(id==1)Browse(window);
-            if(id==2){Install(Selection());SetWindowTextW(statusLabel,L"Installed. Start MX Bikes, open Settings, then FPV Drone Settings.\nYour saved controller mapping was preserved. F8 toggles FPV while riding.");}
+            if(id==2){Install(Selection());SetWindowTextW(statusLabel,L"MXB FPV v1.1 is installed. Start MX Bikes to load v1.1.\nYour radio mapping was preserved. F8 flies / returns; settings show the running version.");}
             if(id==3){auto executable=Selection()/L"mxbikes.exe";if(!fs::exists(executable))throw std::runtime_error("Choose the MX Bikes folder first.");ShellExecuteW(window,L"open",executable.c_str(),nullptr,Selection().c_str(),SW_SHOWNORMAL);}
             if(id==4){Remove(Selection());SetWindowTextW(statusLabel,L"Plugin removed. Controller settings and the diagnostic log were kept in plugins.");}
             if(id==5){Restore(Selection());SetWindowTextW(statusLabel,L"Previous FPV plugin restored. Your saved controller settings were kept.");}

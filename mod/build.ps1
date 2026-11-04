@@ -11,6 +11,39 @@ Push-Location $build
 try {
     $cflags = @('/nologo','/O2','/MT','/DNOMINMAX','/DUNICODE','/D_UNICODE')
     $cppflags = $cflags + @('/std:c++17','/EHsc','/W4')
+    $versionHeader=Get-Content -LiteralPath (Join-Path $root 'src\version.h') -Raw
+    if($versionHeader -notmatch 'Version\[\]\s*=\s*"(\d+\.\d+(?:\.\d+)?)"'){throw 'Cannot read release version'}
+    $releaseVersion=$Matches[1];$parts=$releaseVersion.Split('.');$numeric=(@($parts)+@(0,0) | Select-Object -First 4) -join ','
+    $versionResource=@"
+1 VERSIONINFO
+ FILEVERSION $numeric
+ PRODUCTVERSION $numeric
+ FILEOS 0x40004
+ FILETYPE 0x2
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "040904b0"
+  BEGIN
+   VALUE "CompanyName", "Moonie the Great\0"
+   VALUE "FileDescription", "MX Bikes FPV v$releaseVersion\0"
+   VALUE "FileVersion", "$releaseVersion\0"
+   VALUE "ProductName", "MXB FPV\0"
+   VALUE "ProductVersion", "$releaseVersion\0"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x409, 1200
+ END
+END
+"@
+    Set-Content -LiteralPath 'version.rc' -Value $versionResource -Encoding ascii
+    & rc /nologo /fo version.res version.rc
+    if ($LASTEXITCODE) { throw 'Version resource build failed' }
+    Set-Content -LiteralPath 'installer_version.rc' -Value $versionResource.Replace('FILETYPE 0x2','FILETYPE 0x1') -Encoding ascii
+    & rc /nologo /fo installer_version.res installer_version.rc
+    if ($LASTEXITCODE) { throw 'Installer version resource build failed' }
     $minhook = Join-Path $root 'vendor\minhook\src'
     foreach ($name in @('buffer','hook','trampoline')) {
         & cl @cflags /c /TC (Join-Path $minhook "$name.c") "/Fo$name.obj"
@@ -20,12 +53,12 @@ try {
     if ($LASTEXITCODE) { throw 'MinHook decoder failed' }
     $imgui = Join-Path $root 'vendor\imgui'
     $uiSources = @('imgui.cpp','imgui_draw.cpp','imgui_tables.cpp','imgui_widgets.cpp','backends\imgui_impl_win32.cpp','backends\imgui_impl_opengl3.cpp') | ForEach-Object { Join-Path $imgui $_ }
-    $sources = @('plugin.cpp','controller.cpp','terrain.cpp','peer_sync.cpp','rider_visuals.cpp','drone_audio.cpp','traffic_collision.cpp','updater.cpp','native_view.cpp','map_hud.cpp') | ForEach-Object { Join-Path $root "src\$_" }
+    $sources = @('plugin.cpp','controller.cpp','terrain.cpp','peer_sync.cpp','rider_visuals.cpp','drone_audio.cpp','traffic_collision.cpp','updater.cpp','native_view.cpp','map_hud.cpp','rider_view.cpp') | ForEach-Object { Join-Path $root "src\$_" }
     $audioResources = for($i=0;$i -lt 6;$i++) { $asset=Join-Path $root "assets\audio\kino-drone-$i.wav"; if(!(Test-Path -LiteralPath $asset)){throw "Missing drone audio asset $asset"}; "$($i+201) RCDATA `"$($asset.Replace('\','/'))`"" }
     Set-Content -LiteralPath 'drone_audio.rc' -Value $audioResources -Encoding ascii
     & rc /nologo /fo drone_audio.res drone_audio.rc
     if ($LASTEXITCODE) { throw 'Drone audio resource build failed' }
-    & cl @cppflags "/I$imgui" /LD @sources @uiSources buffer.obj hook.obj trampoline.obj hde64.obj drone_audio.res /link dinput8.lib dxguid.lib user32.lib gdi32.lib ole32.lib bcrypt.lib opengl32.lib ws2_32.lib winhttp.lib windowsapp.lib shell32.lib "/OUT:$dist\mxb_fpv.dlo"
+    & cl @cppflags "/I$imgui" /LD @sources @uiSources buffer.obj hook.obj trampoline.obj hde64.obj drone_audio.res version.res /link dinput8.lib dxguid.lib user32.lib gdi32.lib ole32.lib bcrypt.lib opengl32.lib ws2_32.lib winhttp.lib windowsapp.lib shell32.lib "/OUT:$dist\mxb_fpv.dlo"
     if ($LASTEXITCODE) { throw 'Plugin build failed' }
     & cl @cppflags (Join-Path $root 'src\controls.cpp') (Join-Path $root 'src\controller.cpp') /link /SUBSYSTEM:WINDOWS dinput8.lib dxguid.lib user32.lib gdi32.lib ole32.lib comctl32.lib "/OUT:$build\MXB-FPV-Controls.exe"
     if ($LASTEXITCODE) { throw 'Controls build failed' }
@@ -41,9 +74,13 @@ try {
     Set-Content -LiteralPath 'payload.rc' -Value $rc -Encoding ascii
     & rc /nologo /fo payload.res payload.rc
     if ($LASTEXITCODE) { throw 'Resource build failed' }
-    & cl @cppflags (Join-Path $root 'src\installer.cpp') payload.res /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib ole32.lib shell32.lib advapi32.lib bcrypt.lib "/OUT:$dist\MXB-FPV-Setup.exe"
+    & cl @cppflags (Join-Path $root 'src\installer.cpp') payload.res installer_version.res /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib ole32.lib shell32.lib advapi32.lib bcrypt.lib "/OUT:$dist\MXB-FPV-Setup.exe"
     if ($LASTEXITCODE) { throw 'Installer build failed' }
     if (!$SkipTests) {
+    & cl @cppflags (Join-Path $root 'tests\sharing_regression.cpp') (Join-Path $root 'src\peer_sync.cpp') /link ws2_32.lib "/OUT:$build\sharing_regression.exe"
+    if ($LASTEXITCODE) { throw 'Sharing regression build failed' }
+    & '.\sharing_regression.exe'
+    if ($LASTEXITCODE) { throw 'Sharing regression failed' }
     & cl @cppflags (Join-Path $root 'tests\flight_test.cpp') /link "/OUT:$build\flight_test.exe"
     if ($LASTEXITCODE) { throw 'Flight check build failed' }
     & '.\flight_test.exe'

@@ -4,11 +4,11 @@
 
 Fly an FPV drone in MX Bikes and chase your friends around the track. Made by **Moonie the Great**.
 
-**[Download v1.0 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v1.0/MXB-FPV-1.0-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v1.0)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
+**[Download v1.1 installer](https://github.com/mooniethegreat/mxb-fpv-releases/releases/download/v1.1/MXB-FPV-1.1-Setup.exe)** · **[All downloads](https://github.com/mooniethegreat/mxb-fpv-releases/releases/tag/v1.1)** · **[Report a problem](https://github.com/mooniethegreat/mxb-fpv-releases/issues)**
 
 **Multiplayer is tested and working on public servers.** Supports Windows 64-bit and MX Bikes beta 21e (Steam build 23566986).
 
-**v1.0 is the stable release.** Fly FPV from the mid-race pit screen, find riders and drones on the map, and use the centered flight display. See [v1.0 release notes](CHANGELOG-1.0.md).
+**v1.1 is the stable release.** This update addresses distant riders disappearing, drone sharing recovery, remote movement smoothing, duplicate maps and confusing update messages. See [v1.1 release notes](CHANGELOG-1.1.md).
 
 ## Install and fly
 
@@ -22,7 +22,7 @@ Fly an FPV drone in MX Bikes and chase your friends around the track. Made by **
 
 Joined during a race? From the multiplayer pit screen, click **Fly FPV** beside Select Gate on Event Info, or in the bottom bar on other tabs. F8 also starts drone spectator mode from the pits. Your bike stays out of the race; F8 or Escape returns you to the pits.
 
-Press **M** to toggle the FPV map while riding or flying. Riders have numbered markers; your drone is green and other drones are orange. Map options are under **Audio & display → Map**. The controls sit at bottom center with drone speed close to their right.
+Your drone is green and other drones are orange. With MaxHUD's map enabled, FPV adds drone icons to that map. Without a HUD map, it draws a standalone track map with numbered riders. **M** toggles the FPV map/markers while riding or flying; options are under **Audio & display → Map**. The controls sit at bottom center with drone speed close to their right.
 
 DJI FPV radio defaults: roll axis 0, pitch axis 1, yaw axis 3, throttle axis 2. Your saved mapping stays in place when you update.
 
@@ -42,11 +42,11 @@ Install **0.6 or later on every PC that wants to see and hear drones**, then joi
 
 People without the mod can still ride while you chase them. They cannot see the custom drones, goggles or controller, or hear the drone audio. Installing only on the host does not add these features to unmodified clients.
 
-The Multiplayer settings page shows discovery status. A manual UDP relay remains available as a fallback.
+Both pilots should install **v1.1** for the sharing recovery changes. The Multiplayer page shows connected/flying pilots and provides drone/rider smoothing sliders. Rider update priority follows the drone while flying, so your parked bike stays at spawn. A manual UDP relay remains available as a fallback.
 
 ## Updates and removal
 
-**Settings → FPV Drone → Updates** checks this repository in the background, at most once per six hours across game launches. Click **Check for updates** to refresh immediately. **v1.0 is available on the stable channel**; no early-release option is needed. New installations use stable updates by default, and existing preferences are preserved.
+**Settings → FPV Drone → Updates** shows the version actually running and the newest published version. It says **Up to date** when no update is needed, and **Ready to install** after a download. Checks run in the background with a six-hour cache; a changed plugin version or **Check for updates** refreshes it immediately. **v1.1 is on the stable channel**; no early-release option is needed.
 
 Downloads happen only when you click **Download verified installer**. The checker verifies file size, SHA-256 and game-build compatibility. Open the download folder, close the game, then run Setup. It preserves your radio mapping and keeps the previous plugin; **Roll back** restores it. Nothing installs automatically while you play.
 
@@ -55,6 +55,8 @@ To remove the mod, close the game and choose **Uninstall** in Setup. Your settin
 ## Known limits
 
 Scenery meshes such as fences and overhead bridges are not part of the collision backend yet. Bike/rider contacts crash the drone; they do not force another player's bike to fall. Aircraft presets are approximations. Private game hooks are tied to the supported executable, so a game update may require a new mod build.
+
+Smoothing reduces visible steps but cannot remove server lag or recover completely missing rider data. MaxHUD integration is checked against the supported plugin build; other map plugins are left alone. v1.1 was compiled and inspected offline; in-game multiplayer testing is being handled by the players.
 
 If something goes wrong, [open an issue](https://github.com/mooniethegreat/mxb-fpv-releases/issues) with what happened, your mod/game version and `plugins/mxb_fpv.log`. Please leave passwords and server access details out of reports.
 

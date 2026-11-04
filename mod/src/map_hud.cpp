@@ -14,17 +14,46 @@ Vec3 SegmentPoint(const TrackSegment& s,float distance,int angleSign,int northSi
     float radius=s.radius*turnSign,turn=distance/radius;return start+r*(radius*(1-std::cos(turn)))+f*(radius*std::sin(turn));
 }
 ImVec2 Screen(float x,float y,ImVec2 display) {
-    float w=display.x,h=display.y;if(w/h>4.0f/3)w=h*4.0f/3;else h=w*3.0f/4;
-    return {(display.x-w)*0.5f+x*w,(display.y-h)*0.5f+y*h};
+    // SDK quads are normalized to the full window, not a guessed 4:3 viewport.
+    return {x*display.x,y*display.y};
 }
 void DroneIcon(ImDrawList* draw,ImVec2 p,float s,ImU32 color) {
     for(int x:{-1,1})for(int y:{-1,1}){ImVec2 end{p.x+x*5*s,p.y+y*5*s};draw->AddLine(p,end,color,1.7f*s);draw->AddCircle(end,2.8f*s,color,10,1.4f*s);}
     draw->AddRectFilled({p.x-2*s,p.y-3*s},{p.x+2*s,p.y+3*s},color);
 }
 int Number(int race) {return race>=900000?race-900000:race+1;}
+struct NativeMap {HudQuad background{};float xx{},xz{},yx{},yz{},tx{},ty{},padX{},padY{};};
+bool CaptureNativeMap(std::uintptr_t base,NativeMap* out){
+    __try{
+        if(!base)return false;auto manager=*reinterpret_cast<const std::uintptr_t*>(base+0x48a68);if(!manager)return false;
+        auto begin=*reinterpret_cast<const std::uintptr_t*>(manager+0x190),end=*reinterpret_cast<const std::uintptr_t*>(manager+0x198);
+        if(!begin||end<begin||(end-begin)%8||(end-begin)/8>64)return false;
+        std::uintptr_t map{};for(auto p=begin;p<end;p+=8){auto widget=*reinterpret_cast<const std::uintptr_t*>(p);if(widget&&*reinterpret_cast<const std::uintptr_t*>(widget)==base+0x37d38){map=widget;break;}}
+        if(!map)return false;auto parent=*reinterpret_cast<const std::uintptr_t*>(map+8);int profile=*reinterpret_cast<const int*>(parent+0x110);
+        if(profile<0||profile>2||!*reinterpret_cast<const unsigned char*>(map+0x35a)||!*reinterpret_cast<const unsigned char*>(map+0x35c+profile))return false;
+        int width=*reinterpret_cast<const int*>(map+0x1ac+profile*4),border=*reinterpret_cast<const int*>(map+0x1e4+profile*4);
+        if(width<0||width>11||border<0||border>5)return false;
+        auto quads=*reinterpret_cast<const HudQuad* const*>(map+0x338);if(!quads)return false;out->background=quads[0];
+        float centerX=*reinterpret_cast<const float*>(map+0x4a4),centerZ=*reinterpret_cast<const float*>(map+0x4a8),angle=*reinterpret_cast<const float*>(base+0x489ac);
+        float dx=0,dz=0;
+        if(std::memcmp(reinterpret_cast<const void*>(map+0x518),reinterpret_cast<const void*>(map+0x508),16)){
+            dx=centerX-(*reinterpret_cast<const float*>(map+0x528)+*reinterpret_cast<const float*>(map+0x530))*0.5f;
+            dz=centerZ-(*reinterpret_cast<const float*>(map+0x52c)+*reinterpret_cast<const float*>(map+0x534))*0.5f;
+        }
+        using Axis=float(*)(std::uintptr_t,float);auto xAxis=reinterpret_cast<Axis>(base+0xe200),zAxis=reinterpret_cast<Axis>(base+0xe300);
+        float c=std::cos(angle),s=std::sin(angle),x0=centerX-centerX*c+centerZ*s+dx,z0=centerZ-centerX*s-centerZ*c+dz;
+        out->tx=xAxis(map,x0);out->ty=zAxis(map,z0);
+        out->xx=(xAxis(map,x0+c*100)-out->tx)*0.01f;out->xz=(xAxis(map,x0-s*100)-out->tx)*0.01f;
+        out->yx=(zAxis(map,z0+s*100)-out->ty)*0.01f;out->yz=(zAxis(map,z0+c*100)-out->ty)*0.01f;
+        out->padX=*reinterpret_cast<const float*>(parent+0x134);out->padY=*reinterpret_cast<const float*>(parent+0x138);
+        for(float v:{out->xx,out->xz,out->yx,out->yz,out->tx,out->ty,out->padX,out->padY})if(!std::isfinite(v))return false;
+        return std::abs(out->xx*out->yz-out->xz*out->yx)>1e-12f;
+    }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
 }
 void MapHud::Reset(bool track) {std::lock_guard<std::mutex> lock(mutex_);riders_.clear();projection_={};externalRect_={};externalTick_=0;if(track)line_.clear();}
 void MapHud::Configure(std::filesystem::path path) {std::lock_guard<std::mutex> lock(mutex_);maxHudIni_=std::move(path);layoutTick_=0;}
+void MapHud::BindExternal(std::uintptr_t base){std::lock_guard<std::mutex> lock(mutex_);externalBase_=base;}
 void MapHud::Centerline(int count,const TrackSegment* segments) {
     if(count<1||count>4096||!segments)return;
     std::vector<TrackSegment> source(segments,segments+count);
@@ -82,11 +111,24 @@ void MapHud::External(int state,int* count,void** data,int* stringCount,void** s
         }
     }
     auto inside=[](const Rect& r,float x,float y){return r.valid&&x>=r.x-0.002f&&x<=r.right+0.002f&&y>=r.y-0.002f&&y<=r.bottom+0.002f;};
-    auto now=GetTickCount64();externalRect_=rects[0];externalTick_=now;projection_.valid=false;
+    auto now=GetTickCount64();externalRect_=rects[0];externalRect_.valid=externalRect_.valid&&*count>0;externalTick_=now;projection_.valid=false;
+    NativeMap native;bool nativeProjection=CaptureNativeMap(externalBase_,&native);
+    if(nativeProjection){
+        auto bounds=[](const HudQuad& q){Rect r{q.position[0][0],q.position[0][1],q.position[0][0],q.position[0][1],true};for(const auto& p:q.position){r.x=std::min(r.x,p[0]);r.y=std::min(r.y,p[1]);r.right=std::max(r.right,p[0]);r.bottom=std::max(r.bottom,p[1]);}r.valid=r.right-r.x>0.0001f&&r.bottom-r.y>0.0001f;return r;};
+        auto raw=bounds(native.background);Rect actual;float sx=1/(1+2*native.padX),sy=1/(1+2*native.padY),ox=native.padX*sx,oy=native.padY*sy;
+        // Match MaxHUD's unique map background sprite to its returned SDK quad.
+        // This also observes its actual viewport conversion and current position.
+        if(native.background.sprite>0)for(int i=0;i<*count;i++)if(original[i].sprite==native.background.sprite){actual=bounds(original[i]);if(actual.valid&&raw.valid){sx=(actual.right-actual.x)/(raw.right-raw.x);sy=(actual.bottom-actual.y)/(raw.bottom-raw.y);ox=actual.x-raw.x*sx;oy=actual.y-raw.y*sy;break;}}
+        if(!actual.valid&&raw.valid)actual={raw.x*sx+ox,raw.y*sy+oy,raw.right*sx+ox,raw.bottom*sy+oy,true};
+        if(actual.valid&&std::isfinite(sx)&&std::isfinite(sy)){
+            externalRect_=rects[0]=actual;
+            projection_={native.xx*sx,native.xz*sx,native.yx*sy,native.yz*sy,native.tx*sx+ox,native.ty*sy+oy,now,true};
+        }
+    }
     struct Pair {float x,y,u,v;};std::vector<Pair> pairs;
     // Match labels on the existing map to official SDK rider positions. Fit in
     // 4:3 HUD units (x * 4/3, y), which preserves world distances and rotation.
-    if(rects[0].valid)for(int numbering:{0,1}){
+    if(!projection_.valid&&rects[0].valid)for(int numbering:{0,1}){
         pairs.clear();for(int i=0;i<*stringCount;i++){const auto& s=originalStrings[i];if(!inside(rects[0],s.position[0],s.position[1])||!std::memchr(s.text,0,100))continue;
             const char* text=s.text;while(*text==' '||*text=='#')text++;char* end{};long number=strtol(text,&end,10);if(end==text||(*end&&*end!=' ')||number<0||number>1000)continue;
             auto rider=std::find_if(riders_.begin(),riders_.end(),[&](const Rider& r){return r.point.race==number-numbering&&now-r.seen<1500;});if(rider==riders_.end())continue;
@@ -99,7 +141,7 @@ void MapHud::External(int state,int* count,void** data,int* stringCount,void** s
         for(int flip:{-1,1}){double den=0,real=0,imag=0;for(auto p:pairs){double dx=p.x-x,dy=(p.y-y)*flip,du=p.u-u,dv=p.v-v;den+=dx*dx+dy*dy;real+=dx*du+dy*dv;imag+=dx*dv-dy*du;}
             if(den<4)continue;double a=real/den,b=imag/den,error=0;for(auto p:pairs){double du=u+a*(p.x-x)-b*(p.y-y)*flip-p.u,dv=v+b*(p.x-x)+a*(p.y-y)*flip-p.v;error+=du*du+dv*dv;}
             if(error/pairs.size()>0.000025||a*a+b*b<1e-10)continue;
-            projection_={static_cast<float>(a),static_cast<float>(b),static_cast<float>(u-a*x+b*y*flip),static_cast<float>(v-b*x-a*y*flip),now,true};
+            projection_={static_cast<float>(a*0.75),static_cast<float>(-b*flip*0.75),static_cast<float>(b),static_cast<float>(a*flip),static_cast<float>((u-a*x+b*y*flip)*0.75),static_cast<float>(v-b*x-a*y*flip),now,true};
             // The world Z handedness is retained explicitly in the projection.
             projectionFlip_=flip;break;
         }if(projection_.valid)break;
@@ -119,6 +161,9 @@ void MapHud::Draw(const MapSettings& settings,bool visible,const PeerState& own,
     bool external=settings.external&&externalRect_.valid&&now-externalTick_<200;
     if(external){top=Screen(externalRect_.x,externalRect_.y,display);bottom=Screen(externalRect_.right,externalRect_.bottom,display);}
     bool projected=external&&projection_.valid&&now-projection_.seen<200;
+    // A present MaxHUD map owns the track/rider display. Never paint a second
+    // track over it when projection is temporarily unavailable.
+    if(external&&!projected)return;
     float minX=0,maxX=0,minZ=0,maxZ=0;
     if(!projected){
         bool first=true;auto bounds=[&](Vec3 p){if(first){minX=maxX=p.x;minZ=maxZ=p.z;first=false;}else{minX=std::min(minX,p.x);maxX=std::max(maxX,p.x);minZ=std::min(minZ,p.z);maxZ=std::max(maxZ,p.z);}};
@@ -129,7 +174,7 @@ void MapHud::Draw(const MapSettings& settings,bool visible,const PeerState& own,
         draw->AddText(ImGui::GetFont(),13*scale,{top.x+9*scale,top.y+7*scale},IM_COL32(224,230,236,255),"TRACK / RIDERS + DRONES");
     }
     auto point=[&](Vec3 p){
-        if(projected){float z=p.z*projectionFlip_;return Screen((projection_.a*p.x-projection_.b*z+projection_.tx)*0.75f,projection_.b*p.x+projection_.a*z+projection_.ty,display);}
+        if(projected)return Screen(projection_.xx*p.x+projection_.xz*p.z+projection_.tx,projection_.yx*p.x+projection_.yz*p.z+projection_.ty,display);
         float padding=24*scale,width=bottom.x-top.x-padding*2,height=bottom.y-top.y-padding*2;
         float factor=std::min(width/(maxX-minX),height/(maxZ-minZ));return ImVec2{(top.x+bottom.x)*0.5f+(p.x-(minX+maxX)*0.5f)*factor,(top.y+bottom.y)*0.5f-(p.z-(minZ+maxZ)*0.5f)*factor};
     };

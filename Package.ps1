@@ -33,7 +33,7 @@ $manifestPath=Join-Path $root 'update.json'
 $feed=if(Test-Path -LiteralPath $manifestPath){Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -AsHashtable}else{@{schema=1;stable=$null;preview=$null}}
 $installer=$entries | Where-Object File -EQ $installerName
 if($versionText -notmatch 'SupportedGameHash\[\]\s*=\s*"([0-9a-f]{64})"'){throw 'Supported game hash could not be read'}
-$feed[$Channel]=@{version=$version;notes="MXB FPV v$version stable release. Multiplayer is tested on public servers. Includes pit-screen drone spectator flight, rider/drone maps, centered controls, spatial sound, in-game tuning and verified updates. Reviewed flight behavior is unchanged.";game_sha256=@($Matches[1]);installer=@{sha256=$installer.SHA256;bytes=$installer.Bytes}}
+$feed[$Channel]=@{version=$version;notes="MXB FPV v$version. Drone-centered rider update priority, sparse-rider visibility protection, shared drone reconnect recovery, remote drone/rider smoothing, drone icons on the existing MaxHUD map, and clearer running/latest/downloaded update states. Install on each pilot's PC after closing MX Bikes; saved controls are kept.";game_sha256=@($Matches[1]);installer=@{sha256=$installer.SHA256;bytes=$installer.Bytes}}
 if($Channel -eq 'stable' -and (!$feed.preview -or [version]$feed.preview.version -le [version]$version)){$feed.preview=$feed.stable}
 $feed | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out 'update.json') -Encoding utf8NoBOM
 Write-Output "Prepared FPV $version assets in $out. The live update feed was not changed."

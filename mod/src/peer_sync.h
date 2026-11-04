@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdint>
 namespace fpv {
-struct SyncSettings {bool enabled{true},host{};std::string address{"127.0.0.1"},room{"mx-fpv"};int port{48127},transport{};}; // 0 automatic native game server, 1 manual UDP
+struct SyncSettings {bool enabled{true},host{};std::string address{"127.0.0.1"},room{"mx-fpv"};int port{48127},transport{},smoothingMs{100};}; // 0 automatic native game server, 1 manual UDP
 struct PeerState {int race{};bool flying{};Vec3 position{};Quat rotation{};int preset{};std::uint64_t received{};std::uint64_t id{};Vec3 velocity{};float motor{},activity{},propInches{5};};
 class PeerSync {
     struct Impl;Impl* impl_{};

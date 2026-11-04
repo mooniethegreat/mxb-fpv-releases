@@ -51,7 +51,7 @@ int NativeView::Camera() const {
     __except(EXCEPTION_EXECUTE_HANDLER){return 0;}
 }
 int NativeView::Connection() const {
-    __try {if(*reinterpret_cast<const int*>(base_+0x598904)!=7)return 0;int id=*reinterpret_cast<const int*>(base_+0x598908);return id>0&&id<=127?id:0;}
+    __try {if(*reinterpret_cast<const int*>(base_+0x598904)!=7)return 0;int id=*reinterpret_cast<const int*>(base_+0x598908);return id>=0&&id<=255?id:0;}
     __except(EXCEPTION_EXECUTE_HANDLER){return 0;}
 }
 float NativeView::GateButtonY() const {return *reinterpret_cast<const int*>(base_+0x50ff28)?0.5f:0.533333f;}

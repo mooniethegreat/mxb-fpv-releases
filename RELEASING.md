@@ -1,6 +1,6 @@
 # Publishing an update
 
-`update.json` on the `main` branch is the public update feed. No credentials are shipped in the plugin. Checks use HTTPS on an owned background worker, retain normal certificate validation, and cache the feed in `%LOCALAPPDATA%/MXB-FPV` for six hours. Manual checks bypass the cache.
+`update.json` on the `main` branch is the public update feed. No credentials are shipped in the plugin. Checks use HTTPS on an owned background worker, retain normal certificate validation, and cache the feed in `%LOCALAPPDATA%/MXB-FPV` for six hours. Manual checks and a changed running plugin version bypass the cache.
 
 The manifest has `schema: 1` and two channels: `stable` and `preview`. Either channel may be `null`. A release entry contains:
 

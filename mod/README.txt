@@ -1,8 +1,8 @@
-MX Bikes FPV v1.0
+MX Bikes FPV v1.1
 
-Multiplayer is supported and tested on public servers. Version 1.0 is the stable
-release, with pit-screen spectator flight, rider/drone map markers, a centered
-flight display and in-game settings. It preserves the reviewed flight behavior.
+Multiplayer is supported and tested on public servers. Version 1.1 addresses
+distant rider visibility, drone sharing recovery, remote motion smoothing,
+duplicate maps and update messages. Both pilots should update to v1.1.
 
 INSTALL
 Close MX Bikes. Run MXB-FPV-Setup.exe, select the game folder, click Install.
@@ -39,7 +39,7 @@ UPDATES
 Official releases: https://github.com/mooniethegreat/mxb-fpv-releases/releases
 Settings > FPV Drone > Updates checks in the background, at most once per six
 hours across game launches. Manual Check for updates always refreshes the result.
-Version 1.0 is available in the stable channel. New installations check stable
+Version 1.1 is available in the stable channel. New installations check stable
 releases by default; existing update preferences are preserved. Manual Check for
 updates bypasses the cache. You can disable checks or opt into early releases.
 Nothing is downloaded until you click Download verified installer. Downloads use
@@ -49,6 +49,26 @@ then run the installer. No installer is launched automatically from the game.
 Your existing plugins/mxb_fpv.ini is preserved. Setup saves the previous recognized
 plugin at plugins/mxb_fpv/previous/mxb_fpv.dlo; Roll back restores that binary.
 An offline/error response leaves flight and installed files alone. No login needed.
+Updates show the running plugin and latest published version separately. The
+current version has no update-download button. Downloaded means ready to install,
+not installed; close the game, run Setup and restart to load the new version.
+A changed plugin version refreshes the cached feed. Windows file properties also
+show the installer/plugin version. Reinstalling the same binary keeps rollback.
+
+V1.1 MULTIPLAYER VIEW
+The stock server receives the drone as the observer for rider update priority,
+separate from the parked bike's vehicle state. Sparse rider snapshot gaps are
+allowed up to 2 seconds in FPV; normal riding keeps the stock 0.3-second limit.
+Multiplayer settings provide drone smoothing (100 ms default), rider position
+smoothing (65 ms default), and the sparse-update visibility switch. Set smoothing
+to 0 ms to disable it. These are view changes, not bike physics changes. Complete
+packet loss, server lag and native animation jitter remain possible.
+The existing drone protocol is retained. Valid state restores an expired/missed
+handshake; discovery retries sooner. Bodies, sound and markers use one peer list.
+Connection status and logs report confirmed/flying peers and TX/RX/recovery counts.
+With the supported MaxHUD build, drone icons use its live map projection. FPV no
+longer needs three rider labels or draws another track on top of MaxHUD's map.
+No game was launched or attached to for this build; players perform gameplay tests.
 
 AUDIO AND DISPLAY
 The original Kino drone bank's six motor/air samples are embedded as mono PCM.
@@ -70,14 +90,12 @@ standings and unrelated widgets are retained. Its INI is read for configured
 positions, never edited. Disable filtering in Audio & display if desired.
 
 MAP
-M toggles the FPV map while riding or flying. Riders have numbered markers;
-your drone is green, and other pilots' drones are orange with their numbers.
-The map uses the current track centerline and the game's official rider data.
-On an active MaxHUD map, three non-collinear rider labels can establish its
-live projection, including rotation and range. Drone icons use that projection.
-If it cannot be established, a track/rider/drone map uses the same footprint,
-or the upper-right corner if MaxHUD is absent. It never projects from a guessed
-world transform. Map settings and key are under Audio & display > Map.
+M toggles FPV map/markers while riding or flying. Your drone is green, and other
+pilots' drones are orange with their numbers. On the supported MaxHUD build,
+drone icons use its current map projection, including rotation, range and actual
+viewport. The existing track and rider markers stay in place; no second track
+map is drawn over them. Without a HUD map, FPV uses the official SDK centerline
+and rider data for a standalone map. Map settings are in Audio & display > Map.
 
 COLLISIONS
 The 250 Hz flight loop keeps gravity, motor spool, air drag and native terrain
@@ -99,8 +117,9 @@ You can disable sharing in Settings > FPV > Multiplayer, then Save.
 
 MX Bikes already forwards typed peer data through its normal connection.
 The mod discovers current riders and exchanges a capability handshake. Only
-confirmed FPV peers receive the 20 Hz drone stream. Clients without this mod
-ignore the unknown discovery type and receive no continuous FPV stream.
+confirmed FPV peers receive the 20 Hz drone stream. During discovery while flying,
+bounded 2 Hz state messages repair missed/reset handshakes. Clients without the
+mod ignore this reserved type.
 The payload carries FPV mode, drone position/orientation/size, motor output,
 velocity and control activity. Receivers draw the quad and play spatial sound.
 The nearest eight remote drones can be heard at once. Stale sound stops and
@@ -113,7 +132,8 @@ Camera chase still works alongside riders who do not install the mod.
 
 The native forwarding path and unknown-type handling were traced in the pinned
 game binary. The user subsequently tested 0.6 on public servers and confirmed
-multiplayer works. The reviewed build is now published as the stable v1.0 release.
+multiplayer works. Version 1.1 addresses the later visibility/sharing regression;
+players perform the in-game verification for this update.
 Server content checks, bike replication and race results are unchanged.
 
 Settings > FPV > Multiplayer shows discovered FPV peers versus connected riders.
@@ -121,8 +141,8 @@ If a custom server filters this channel, Manual UDP relay remains available:
 one PC hosts port 48127; others use its reachable IPv4 address, port and room.
 That fallback needs LAN/VPN/port forwarding, as in 0.5. Its version-2 payload
 remains compatible with 0.5 when both sides explicitly select/use manual UDP.
-Automatic sync is wire-compatible with 0.6. Use 0.7 on each viewer to get map
-markers. Spectator drones use a reserved cosmetic identity rather than borrowing
+Automatic sync is wire-compatible with 0.6. Use 1.1 on each viewer for the current
+sharing recovery and HUD map integration. Spectator drones use a reserved cosmetic identity rather than borrowing
 another rider's identity; this does not alter the server's rider roster.
 
 SUPPORT / UNINSTALL

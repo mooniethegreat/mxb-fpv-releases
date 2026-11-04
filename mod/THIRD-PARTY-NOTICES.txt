@@ -11,7 +11,8 @@ MIT. Full notices: ImGui-LICENSE.txt.
 FrostMod, commit 6aae5a41c27dbc10f3cbc8cc8058e72a37269914
 https://github.com/Frostn1/frostmod
 Copyright (c) 2026 Frostn1. MIT. Full license: FrostMod-LICENSE.txt.
-Its published terrain sampler and UI page layout informed terrain.cpp. These
+Its published terrain sampler, UI page layout and sparse-rider snapshot gap
+findings informed terrain.cpp and rider_view.cpp. These
 interfaces were also corroborated against the local runtime .text snapshot.
 FrostMod itself is not included or installed by this package.
 
@@ -19,13 +20,17 @@ Kino / KiNO Mod by trbflxr and the Kino team:
 https://github.com/trbflxr/kino
 The six drone soundbank subsounds in Data/Bundles/drone_win.knd (reference
 commit 49f2b8, full revision recorded in assets/audio/PROVENANCE.txt) supply
-the motor/air samples embedded in this multiplayer test candidate.
+the motor/air samples embedded in this mod.
 They are decoded to mono PCM, with short loop-splice crossfades. The native
 RPM/load/speed crossfader is a new implementation, not the original FMOD mix.
 Audio remains credited to its original creators. No ownership or license to
 the original sounds is claimed by this project.
 Kino executable code, CarX, Unity, Rewired and the FMOD runtime are not included.
 Drone simulation, hardware abstraction and procedural meshes are new native code.
+
+MaxHUD by HornetMaX is an optional, separately installed plugin. No MaxHUD binary,
+image, source or other asset is included. The optional map adapter reads its map
+projection on the exact verified local build; SDK output remains owned by MaxHUD.
 
 Rate curve references: Betaflight's five rate models, mathematical response
 curves implemented independently in flight.h:

@@ -7,7 +7,7 @@
 
 namespace fpv {
 struct UpdateStatus {
-    bool busy{}, available{}, compatible{};
+    bool busy{}, available{}, compatible{}, checked{};
     std::string version, notes, sha256;
     std::wstring releaseUrl;
     std::filesystem::path downloaded;
